@@ -1,0 +1,14 @@
+# Dependencies and builds
+node_modules/
+dist/
+
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+
+# Local tooling
+.claude/
+.vercel/
+*.log
+.DS_Store

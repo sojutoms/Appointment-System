@@ -1,0 +1,315 @@
+/* ---------- Theme: overrides Bootstrap's CSS variables ---------- */
+:root {
+  --brand: #4f46e5;
+  --brand-rgb: 79, 70, 229;
+  --brand-dark: #4338ca;
+  --brand-soft: #eef2ff;
+
+  --bs-primary: var(--brand);
+  --bs-primary-rgb: var(--brand-rgb);
+  --bs-link-color: var(--brand);
+  --bs-link-color-rgb: var(--brand-rgb);
+  --bs-link-hover-color: var(--brand-dark);
+  --bs-body-font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bs-body-bg: #f8fafc;
+  --bs-border-radius: 0.6rem;
+  --bs-border-radius-lg: 0.8rem;
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--brand);
+  --bs-btn-border-color: var(--brand);
+  --bs-btn-hover-bg: var(--brand-dark);
+  --bs-btn-hover-border-color: var(--brand-dark);
+  --bs-btn-active-bg: var(--brand-dark);
+  --bs-btn-active-border-color: var(--brand-dark);
+  --bs-btn-disabled-bg: var(--brand);
+  --bs-btn-disabled-border-color: var(--brand);
+  --bs-btn-focus-shadow-rgb: var(--brand-rgb);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--brand);
+  --bs-btn-border-color: var(--brand);
+  --bs-btn-hover-bg: var(--brand);
+  --bs-btn-hover-border-color: var(--brand);
+  --bs-btn-active-bg: var(--brand-dark);
+  --bs-btn-active-border-color: var(--brand-dark);
+  --bs-btn-focus-shadow-rgb: var(--brand-rgb);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: rgba(var(--brand-rgb), 0.5);
+  box-shadow: 0 0 0 0.2rem rgba(var(--brand-rgb), 0.15);
+}
+
+.text-primary {
+  color: var(--brand) !important;
+}
+
+/* ---------- Layout ---------- */
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-navbar {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.app-navbar .nav-link.active {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.app-footer {
+  background: #fff;
+}
+
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 40vh;
+}
+
+/* ---------- Brand ---------- */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #0f172a;
+  text-decoration: none;
+}
+
+.brand-light {
+  color: #fff;
+}
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  background: var(--brand);
+  color: #fff;
+  font-size: 1rem;
+}
+
+.brand-light .brand-mark {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* ---------- Auth pages ---------- */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 992px) {
+  .auth-shell {
+    grid-template-columns: minmax(380px, 5fr) 7fr;
+  }
+}
+
+.auth-aside {
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 3rem;
+  color: #fff;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.14), transparent 45%),
+    linear-gradient(150deg, #4f46e5 0%, #4338ca 55%, #312e81 100%);
+}
+
+.aside-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.auth-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 460px;
+  background: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 1rem;
+  padding: 2rem 1.5rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+@media (min-width: 576px) {
+  .auth-card {
+    padding: 2.5rem;
+  }
+}
+
+.password-toggle {
+  border-color: var(--bs-border-color);
+}
+
+/* ---------- OTP ---------- */
+.otp-input {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+}
+
+.otp-box {
+  height: 3.4rem;
+  padding: 0;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.otp-box.is-invalid {
+  /* Bootstrap's error icon doesn't fit in a one-digit box. */
+  background-image: none;
+  padding-right: 0;
+}
+
+@media (min-width: 400px) {
+  .otp-input {
+    gap: 0.65rem;
+  }
+}
+
+.otp-hero-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.9rem;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 1.5rem;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.step-indicator {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.step-indicator li {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.6rem;
+  border-top: 3px solid var(--bs-border-color);
+  color: var(--bs-secondary-color);
+  font-size: 0.85rem;
+}
+
+.step-indicator li.active,
+.step-indicator li.done {
+  border-top-color: var(--brand);
+  color: var(--bs-body-color);
+}
+
+.step-dot {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--bs-tertiary-bg);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.step-indicator li.active .step-dot,
+.step-indicator li.done .step-dot {
+  background: var(--brand);
+  color: #fff;
+}
+
+@media (max-width: 399.98px) {
+  .step-label {
+    display: none;
+  }
+}
+
+/* ---------- Home ---------- */
+.hero {
+  background:
+    radial-gradient(circle at 85% 20%, rgba(var(--brand-rgb), 0.12), transparent 40%),
+    linear-gradient(180deg, #fff 0%, var(--bs-body-bg) 100%);
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.step-icon,
+.stat-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.7rem;
+  font-size: 1.25rem;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.service-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* ---------- Dashboard ---------- */
+.stat-icon {
+  flex: none;
+}
+
+.tone-primary { background: var(--brand-soft); color: var(--brand); }
+.tone-warning { background: #fef3c7; color: #b45309; }
+.tone-success { background: #dcfce7; color: #15803d; }
+.tone-secondary { background: #f1f5f9; color: #475569; }
+.tone-info { background: #e0f2fe; color: #0369a1; }
+.tone-danger { background: #fee2e2; color: #b91c1c; }
