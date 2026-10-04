@@ -1,15 +1,31 @@
 import { Router } from 'express';
-import { createStaff, deleteStaff, getStaff, listStaff, updateStaff } from '../controllers/staffController.js';
-import { authorize, optionalAuth, protect } from '../middleware/auth.js';
-import { createStaffRules, mongoIdParam, updateStaffRules } from '../validators/rules.js';
+import {
+  createStaff,
+  deleteStaff,
+  getStaff,
+  getUnavailableDates,
+  inviteStaff,
+  listStaff,
+  revokeStaffAccess,
+  updateStaff,
+} from '../controllers/staffController.js';
+import { optionalAuth, protect, requireAdmin } from '../middleware/auth.js';
+import { createStaffRules, mongoIdParam, unavailableRules, updateStaffRules } from '../validators/rules.js';
 
 const router = Router();
 
+// Public reads; staff emails and account status are only included for the admin panel.
 router.get('/', optionalAuth, listStaff);
-router.get('/:id', mongoIdParam, getStaff);
+router.get('/:id', optionalAuth, mongoIdParam, getStaff);
+router.get('/:id/unavailable', unavailableRules, getUnavailableDates);
 
-router.post('/', protect, authorize('admin'), createStaffRules, createStaff);
-router.put('/:id', protect, authorize('admin'), updateStaffRules, updateStaff);
-router.delete('/:id', protect, authorize('admin'), mongoIdParam, deleteStaff);
+// Changes are admin-panel only.
+router.post('/', protect, requireAdmin, createStaffRules, createStaff);
+router.put('/:id', protect, requireAdmin, updateStaffRules, updateStaff);
+router.delete('/:id', protect, requireAdmin, mongoIdParam, deleteStaff);
+
+// Staff-portal access.
+router.post('/:id/invite', protect, requireAdmin, mongoIdParam, inviteStaff);
+router.delete('/:id/access', protect, requireAdmin, mongoIdParam, revokeStaffAccess);
 
 export default router;

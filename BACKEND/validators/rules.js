@@ -4,7 +4,7 @@ import { body, param, query } from 'express-validator';
 import validate from '../middleware/validate.js';
 import { STATUSES } from '../models/Appointment.js';
 import { ROLES } from '../models/User.js';
-import { OTP_PURPOSES } from '../models/Otp.js';
+import { PUBLIC_OTP_PURPOSES } from '../models/Otp.js';
 import { isValidDateString } from '../utils/time.js';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -51,7 +51,7 @@ export const verifyEmailRules = [email(), otpCode(), validate];
 
 export const resendOtpRules = [
   email(),
-  body('purpose').isIn(OTP_PURPOSES).withMessage('Invalid code type.'),
+  body('purpose').isIn(PUBLIC_OTP_PURPOSES).withMessage('Invalid code type.'),
   validate,
 ];
 
@@ -68,16 +68,106 @@ export const resetPasswordRules = [
 
 export const updateProfileRules = [
   name().optional(),
-  email().optional(),
   phone(),
   strongPassword('newPassword').optional({ values: 'falsy' }),
   body('currentPassword').optional().isString(),
   validate,
 ];
 
+export const emailChangeRules = [
+  email('newEmail'),
+  body('currentPassword').isString().notEmpty().withMessage('Enter your current password.'),
+  validate,
+];
+
+export const emailChangeVerifyRules = [email('newEmail'), otpCode(), validate];
+
+export const emailChangeResendRules = [email('newEmail'), validate];
+
 export const roleRules = [
   param('id').isMongoId().withMessage('Invalid ID.'),
-  body('role').isIn(ROLES).withMessage(`Role must be one of: ${ROLES.join(', ')}.`),
+  // Staff accounts are managed from the Staff page (invite / revoke), not by role changes.
+  body('role').isIn(['client', 'admin']).withMessage('Role must be client or admin.'),
+  validate,
+];
+
+// Shared by list endpoints: page/limit must be sensible numbers, search bounded.
+const listQuery = () => [
+  query('page').optional().isInt({ min: 1, max: 10000 }).withMessage('Invalid page.'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be 1 to 50.'),
+  query('search').optional().isString().isLength({ max: 100 }).withMessage('Search is too long.'),
+];
+
+export const staffActivateRules = [email(), otpCode(), strongPassword('password'), validate];
+
+// ---------- Staff portal & time off ----------
+
+const STATUS_FILTERS = [...STATUSES, 'active'];
+
+export const staffDayRules = [dateField(query('date').optional({ values: 'falsy' })), validate];
+
+export const staffListRules = [
+  ...listQuery(),
+  query('status').optional({ values: 'falsy' }).isIn(STATUS_FILTERS).withMessage('Invalid status.'),
+  dateField(query('from').optional({ values: 'falsy' })),
+  dateField(query('to').optional({ values: 'falsy' })),
+  query('scope').optional({ values: 'falsy' }).isIn(['upcoming', 'past']).withMessage('Invalid scope.'),
+  validate,
+];
+
+export const staffAppointmentUpdateRules = [
+  param('id').isMongoId().withMessage('Invalid ID.'),
+  body('status').optional().isIn(['confirmed', 'completed']).withMessage('Staff can confirm or complete appointments.'),
+  body('staffNotes').optional().isString().trim().isLength({ max: 1000 }).withMessage('Staff notes must be 1000 characters or less.'),
+  validate,
+];
+
+export const listTimeOffRules = [
+  ...listQuery(),
+  query('staff').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid staff ID.'),
+  dateField(query('from').optional({ values: 'falsy' })),
+  dateField(query('to').optional({ values: 'falsy' })),
+  validate,
+];
+
+export const createTimeOffRules = [
+  body('staff').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid staff member.'),
+  dateField(body('date')),
+  body('allDay').optional().isBoolean().withMessage('allDay must be true or false.').toBoolean(),
+  body('startTime').optional({ values: 'falsy' }).matches(TIME).withMessage('Start time must be HH:MM.'),
+  body('endTime').optional({ values: 'falsy' }).matches(TIME).withMessage('End time must be HH:MM.'),
+  body('reason').optional().isString().trim().isLength({ max: 200 }).withMessage('Reason must be 200 characters or less.'),
+  validate,
+];
+
+export const unavailableRules = [
+  param('id').isMongoId().withMessage('Invalid ID.'),
+  dateField(query('from').optional({ values: 'falsy' })),
+  dateField(query('to').optional({ values: 'falsy' })),
+  validate,
+];
+
+export const listUsersRules = [
+  ...listQuery(),
+  query('role').optional({ values: 'falsy' }).isIn(ROLES).withMessage('Invalid role.'),
+  query('verified').optional({ values: 'falsy' }).isIn(['true', 'false']).withMessage('Invalid filter.'),
+  validate,
+];
+
+// ---------- Admin auth ----------
+
+export const adminLoginRules = [email(), body('password').isString().notEmpty().withMessage('Password is required.'), validate];
+
+const challengeToken = () =>
+  body('challengeToken').isString().isLength({ min: 20, max: 1000 }).withMessage('Your login session expired. Please start again.');
+
+export const adminVerifyRules = [challengeToken(), otpCode(), validate];
+export const adminResendRules = [challengeToken(), validate];
+
+export const auditLogRules = [
+  ...listQuery(),
+  query('action').optional({ values: 'falsy' }).isString().matches(/^[a-z_.]{1,50}$/).withMessage('Invalid action filter.'),
+  query('success').optional({ values: 'falsy' }).isIn(['true', 'false']).withMessage('Invalid filter.'),
   validate,
 ];
 
@@ -149,6 +239,13 @@ export const availableSlotsRules = [
 ];
 
 export const listAppointmentsRules = [
-  query('user').optional().isMongoId().withMessage('Invalid user ID.'),
+  ...listQuery(),
+  query('user').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid user ID.'),
+  query('staff').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid staff ID.'),
+  query('service').optional({ values: 'falsy' }).isMongoId().withMessage('Invalid service ID.'),
+  dateField(query('from').optional({ values: 'falsy' })),
+  dateField(query('to').optional({ values: 'falsy' })),
+  query('scope').optional({ values: 'falsy' }).isIn(['upcoming', 'past']).withMessage('Invalid scope.'),
+  query('sort').optional({ values: 'falsy' }).isIn(['asc', 'desc']).withMessage('Invalid sort.'),
   validate,
 ];

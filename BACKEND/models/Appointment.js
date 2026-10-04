@@ -16,6 +16,9 @@ const appointmentSchema = new mongoose.Schema(
     endTime: { type: String, required: true, match: /^\d{2}:\d{2}$/ },
     status: { type: String, enum: STATUSES, default: 'pending' },
     notes: { type: String, trim: true, maxlength: 500, default: '' },
+    // Private notes written by staff/admins. select: false keeps them out of
+    // every query unless explicitly requested, so clients never receive them.
+    staffNotes: { type: String, trim: true, maxlength: 1000, default: '', select: false },
   },
   { timestamps: true }
 );

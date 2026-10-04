@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import {
+  activateStaff,
   forgotPassword,
   login,
   me,
   register,
   resendOtp,
+  resendStaffInvite,
   resetPassword,
   verifyEmail,
   verifyResetOtp,
@@ -17,6 +19,7 @@ import {
   registerRules,
   resendOtpRules,
   resetPasswordRules,
+  staffActivateRules,
   verifyEmailRules,
   verifyResetOtpRules,
 } from '../validators/rules.js';
@@ -55,6 +58,10 @@ router.post('/login', loginLimiter, loginRules, login);
 router.post('/forgot-password', emailLimiter, forgotPasswordRules, forgotPassword);
 router.post('/verify-reset-otp', verifyLimiter, verifyResetOtpRules, verifyResetOtp);
 router.post('/reset-password', verifyLimiter, resetPasswordRules, resetPassword);
+
+// Staff accounts: set a password with the code from the admin's invite.
+router.post('/staff/activate', verifyLimiter, staffActivateRules, activateStaff);
+router.post('/staff/resend', emailLimiter, forgotPasswordRules, resendStaffInvite);
 
 router.get('/me', protect, me);
 

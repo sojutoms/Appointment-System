@@ -1,47 +1,26 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import Alert from 'react-bootstrap/Alert';
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import Spinner from 'react-bootstrap/Spinner';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
+import Stack from '@mui/material/Stack';
+import Step from '@mui/material/Step';
+import StepLabel from '@mui/material/StepLabel';
+import Stepper from '@mui/material/Stepper';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import api from '../api/axios';
 import OtpInput from '../components/OtpInput';
 import PasswordField from '../components/PasswordField';
 import ResendCode from '../components/ResendCode';
+import SubmitButton from '../components/SubmitButton';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
 import { getCooldownUntil, startCooldown } from '../utils/otpSession';
 import { validateEmail, validatePassword } from '../utils/validation';
 
 const PURPOSE = 'reset-password';
 const STEPS = ['Email', 'Code', 'New password'];
-
-function StepIndicator({ step }) {
-  return (
-    <ol className="step-indicator mb-4" aria-label="Progress">
-      {STEPS.map((label, i) => (
-        <li key={label} className={i < step ? 'done' : i === step ? 'active' : ''} aria-current={i === step ? 'step' : undefined}>
-          <span className="step-dot">{i < step ? <i className="bi bi-check" /> : i + 1}</span>
-          <span className="step-label">{label}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function SubmitButton({ busy, busyText, children, disabled }) {
-  return (
-    <Button type="submit" className="w-100" size="lg" disabled={busy || disabled}>
-      {busy ? (
-        <>
-          <Spinner size="sm" className="me-2" />
-          {busyText}
-        </>
-      ) : (
-        children
-      )}
-    </Button>
-  );
-}
 
 // Three steps on one page: request a code -> enter the code -> set a new password.
 export default function ForgotPassword() {
@@ -69,7 +48,7 @@ export default function ForgotPassword() {
     if (retryAfter) setCooldownUntil(startCooldown(PURPOSE, normalizedEmail, retryAfter));
   };
 
-  const reset = () => {
+  const clearMessages = () => {
     setError('');
     setNotice('');
     setFieldErrors({});
@@ -78,7 +57,7 @@ export default function ForgotPassword() {
   // Step 1: request the code.
   const requestCode = async (e) => {
     e.preventDefault();
-    reset();
+    clearMessages();
     const emailError = validateEmail(email);
     if (emailError) {
       setFieldErrors({ email: emailError });
@@ -108,7 +87,7 @@ export default function ForgotPassword() {
   };
 
   const resend = async () => {
-    reset();
+    clearMessages();
     try {
       const { data } = await api.post('/auth/resend-otp', { email: normalizedEmail, purpose: PURPOSE });
       setCooldownUntil(startCooldown(PURPOSE, normalizedEmail, data.resendAvailableIn));
@@ -122,7 +101,7 @@ export default function ForgotPassword() {
   // Step 2: check the code; the server returns a one-time reset token.
   const verifyCode = async (otp) => {
     if (busy) return;
-    reset();
+    clearMessages();
     if (!/^\d{6}$/.test(otp)) {
       setError('Enter all 6 digits of the code.');
       return;
@@ -143,7 +122,7 @@ export default function ForgotPassword() {
   // Step 3: set the new password.
   const savePassword = async (e) => {
     e.preventDefault();
-    reset();
+    clearMessages();
     const errors = {};
     const passwordError = validatePassword(passwords.password);
     if (passwordError) errors.password = passwordError;
@@ -177,28 +156,47 @@ export default function ForgotPassword() {
 
   return (
     <>
-      <h1 className="h3 fw-semibold mb-1">Reset your password</h1>
-      <p className="text-body-secondary mb-4">
+      <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
+        Reset your password
+      </Typography>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>
         {step === 0 && "Enter your account's email and we'll send you a 6-digit code."}
         {step === 1 && (
           <>
-            Enter the code sent to <span className="fw-semibold text-body text-break">{normalizedEmail}</span>. It
-            expires in 10 minutes.
+            Enter the code sent to{' '}
+            <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', wordBreak: 'break-all' }}>
+              {normalizedEmail}
+            </Box>
+            . It expires in 10 minutes.
           </>
         )}
         {step === 2 && 'Choose a new password for your account.'}
-      </p>
+      </Typography>
 
-      <StepIndicator step={step} />
+      <Stepper activeStep={step} alternativeLabel sx={{ mb: 3 }}>
+        {STEPS.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
 
-      {notice && !error && <Alert variant="success">{notice}</Alert>}
-      {error && <Alert variant="danger">{error}</Alert>}
+      {notice && !error && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {notice}
+        </Alert>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       {step === 0 && (
-        <Form noValidate onSubmit={requestCode}>
-          <Form.Group className="mb-4" controlId="email">
-            <Form.Label>Email</Form.Label>
-            <Form.Control
+        <Box component="form" noValidate onSubmit={requestCode}>
+          <Stack spacing={3}>
+            <TextField
+              label="Email"
               type="email"
               placeholder="you@example.com"
               autoComplete="email"
@@ -208,19 +206,20 @@ export default function ForgotPassword() {
                 setEmail(e.target.value);
                 setFieldErrors({});
               }}
-              isInvalid={Boolean(fieldErrors.email)}
+              error={Boolean(fieldErrors.email)}
+              helperText={fieldErrors.email}
             />
-            <Form.Control.Feedback type="invalid">{fieldErrors.email}</Form.Control.Feedback>
-          </Form.Group>
-          <SubmitButton busy={busy} busyText="Sending code...">
-            Send code
-          </SubmitButton>
-        </Form>
+            <SubmitButton busy={busy} busyText="Sending code...">
+              Send code
+            </SubmitButton>
+          </Stack>
+        </Box>
       )}
 
       {step === 1 && (
         <>
-          <form
+          <Box
+            component="form"
             noValidate
             onSubmit={(e) => {
               e.preventDefault();
@@ -228,65 +227,62 @@ export default function ForgotPassword() {
             }}
           >
             <OtpInput value={code} onChange={setCode} onComplete={verifyCode} disabled={busy} invalid={Boolean(error)} />
-            <div className="mt-4">
-              <SubmitButton busy={busy} busyText="Checking..." disabled={code.trim().length !== 6}>
-                Continue
-              </SubmitButton>
-            </div>
-          </form>
-          <div className="mt-4">
+            <SubmitButton busy={busy} busyText="Checking..." disabled={code.trim().length !== 6} sx={{ mt: 3 }}>
+              Continue
+            </SubmitButton>
+          </Box>
+          <Box sx={{ mt: 3 }}>
             <ResendCode cooldownUntil={cooldownUntil} onResend={resend} disabled={busy} />
-          </div>
-          <div className="text-center mt-3">
+          </Box>
+          <Box sx={{ textAlign: 'center', mt: 1 }}>
             <Button
-              variant="link"
-              size="sm"
+              size="small"
               onClick={() => {
-                reset();
+                clearMessages();
                 setCode('');
                 setStep(0);
               }}
             >
               Use a different email
             </Button>
-          </div>
+          </Box>
         </>
       )}
 
       {step === 2 && (
-        <Form noValidate onSubmit={savePassword}>
-          <PasswordField
-            id="password"
-            label="New password"
-            name="password"
-            placeholder="At least 8 characters, with a letter and a number"
-            autoComplete="new-password"
-            autoFocus
-            value={passwords.password}
-            onChange={handlePasswordChange}
-            error={fieldErrors.password}
-          />
-          <PasswordField
-            id="confirmPassword"
-            label="Confirm new password"
-            name="confirmPassword"
-            placeholder="Re-enter your new password"
-            autoComplete="new-password"
-            value={passwords.confirmPassword}
-            onChange={handlePasswordChange}
-            error={fieldErrors.confirmPassword}
-          />
-          <div className="mt-2">
+        <Box component="form" noValidate onSubmit={savePassword}>
+          <Stack spacing={2.5}>
+            <PasswordField
+              label="New password"
+              name="password"
+              autoComplete="new-password"
+              autoFocus
+              value={passwords.password}
+              onChange={handlePasswordChange}
+              error={fieldErrors.password}
+              helperText="At least 8 characters, with a letter and a number"
+            />
+            <PasswordField
+              label="Confirm new password"
+              name="confirmPassword"
+              autoComplete="new-password"
+              value={passwords.confirmPassword}
+              onChange={handlePasswordChange}
+              error={fieldErrors.confirmPassword}
+            />
             <SubmitButton busy={busy} busyText="Saving...">
               Update password
             </SubmitButton>
-          </div>
-        </Form>
+          </Stack>
+        </Box>
       )}
 
-      <p className="text-center text-body-secondary mt-4 mb-0">
-        Remembered it? <Link to="/login">Back to log in</Link>
-      </p>
+      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 3 }}>
+        Remembered it?{' '}
+        <Link component={RouterLink} to="/login">
+          Back to log in
+        </Link>
+      </Typography>
     </>
   );
 }

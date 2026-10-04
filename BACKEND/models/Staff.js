@@ -16,9 +16,13 @@ const staffSchema = new mongoose.Schema(
     startTime: { type: String, match: TIME_PATTERN, default: '09:00' },
     endTime: { type: String, match: TIME_PATTERN, default: '17:00' },
     isActive: { type: Boolean, default: true },
+    // Login account for the staff portal (created when an admin sends an invite).
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
+
+staffSchema.index({ user: 1 }, { unique: true, partialFilterExpression: { user: { $type: 'objectId' } } });
 
 staffSchema.set('toJSON', {
   transform: (_doc, ret) => {

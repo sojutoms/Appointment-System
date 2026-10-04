@@ -1,6 +1,13 @@
 import { config } from '../config/env.js';
 
 export const SLOT_STEP_MINUTES = 30;
+export const MAX_DAYS_AHEAD = 60;
+
+// "YYYY-MM-DD" + n days, computed in UTC so the server timezone doesn't matter.
+export function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
 
 export function toMinutes(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);

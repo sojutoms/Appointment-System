@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-export const ROLES = ['client', 'admin'];
+// 'staff' accounts are created only through a staff invite from the admin panel.
+export const ROLES = ['client', 'admin', 'staff'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -26,6 +27,10 @@ const userSchema = new mongoose.Schema(
     // an older value are rejected (see middleware/auth.js), so changing or
     // resetting a password logs out every other session.
     tokenVersion: { type: Number, default: 0, select: false },
+    // Brute-force protection: too many wrong passwords locks the account briefly.
+    failedLoginAttempts: { type: Number, default: 0, select: false },
+    lockUntil: { type: Date, default: null, select: false },
+    lastLoginAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
@@ -50,6 +55,8 @@ userSchema.set('toJSON', {
   transform: (_doc, ret) => {
     delete ret.password;
     delete ret.tokenVersion;
+    delete ret.failedLoginAttempts;
+    delete ret.lockUntil;
     delete ret.__v;
     return ret;
   },

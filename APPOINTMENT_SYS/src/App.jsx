@@ -1,43 +1,74 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import AuthProvider from './context/AuthProvider';
+import ToastProvider from './context/ToastProvider';
 import GuestRoute from './components/GuestRoute';
+import PageLoader from './components/PageLoader';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthLayout from './layouts/AuthLayout';
 import MainLayout from './layouts/MainLayout';
-import Dashboard from './pages/Dashboard';
-import ForgotPassword from './pages/ForgotPassword';
-import VerifyEmail from './pages/VerifyEmail';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import NotFound from './pages/NotFound';
-import Register from './pages/Register';
+import { CLIENT_ROLES } from './utils/roles';
+
+// Pages are loaded on demand (code splitting) to keep the first download small.
+const BookAppointment = lazy(() => import('./pages/BookAppointment'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const Home = lazy(() => import('./pages/Home'));
+const Login = lazy(() => import('./pages/Login'));
+const MyAppointments = lazy(() => import('./pages/MyAppointments'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Register = lazy(() => import('./pages/Register'));
+const StaffActivate = lazy(() => import('./pages/StaffActivate'));
+const StaffSchedule = lazy(() => import('./pages/staff/StaffSchedule'));
+const StaffTimeOff = lazy(() => import('./pages/staff/StaffTimeOff'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          {/* Only for visitors who are not logged in */}
-          <Route element={<GuestRoute />}>
-            <Route element={<AuthLayout />}>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-            </Route>
-          </Route>
+        <ToastProvider>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Only for visitors who are not logged in */}
+              <Route element={<GuestRoute />}>
+                <Route element={<AuthLayout />}>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/staff/activate" element={<StaffActivate />} />
+                </Route>
+              </Route>
 
-          <Route element={<MainLayout />}>
-            <Route path="/" element={<Home />} />
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Home />} />
 
-            {/* Requires login */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-            </Route>
+                {/* Clients (booking side) */}
+                <Route element={<ProtectedRoute roles={CLIENT_ROLES} />}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/book" element={<BookAppointment />} />
+                  <Route path="/appointments" element={<MyAppointments />} />
+                  <Route path="/appointments/:id/reschedule" element={<BookAppointment />} />
+                </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+                {/* Staff portal */}
+                <Route element={<ProtectedRoute roles={['staff']} />}>
+                  <Route path="/staff" element={<StaffSchedule />} />
+                  <Route path="/staff/time-off" element={<StaffTimeOff />} />
+                </Route>
+
+                {/* Everyone signed in */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/profile" element={<Profile />} />
+                </Route>
+
+                <Route path="*" element={<NotFound />} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,14 +1,9 @@
-import jwt from 'jsonwebtoken';
-import { config } from '../config/env.js';
+import Staff from '../models/Staff.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
+import { assertAdminPasswordStrength, recordLogin, verifyCredentials } from '../utils/credentials.js';
 import { clearOtp, consumeResetToken, issueOtp, issueResetToken, verifyOtp } from '../utils/otp.js';
-
-export function signToken(user) {
-  return jwt.sign({ id: user._id, role: user.role, v: user.tokenVersion ?? 0 }, config.jwtSecret, {
-    expiresIn: config.jwtExpiresIn,
-  });
-}
+import { SCOPES, scopeForRole, signToken } from '../utils/tokens.js';
 
 // POST /api/auth/register
 // Creates an unverified account and emails a verification code. No login
@@ -17,7 +12,8 @@ export async function register(req, res) {
   const { name, email, password, phone } = req.body;
 
   let user = await User.findOne({ email }).select('+tokenVersion');
-  if (user?.isVerified) {
+  // Verified accounts, and any staff/admin account, can never be taken over by signing up again.
+  if (user?.isVerified || (user && user.role !== 'client')) {
     throw new ApiError(409, 'An account with that email already exists.');
   }
 
@@ -43,7 +39,8 @@ export async function register(req, res) {
 // POST /api/auth/verify-email
 export async function verifyEmail(req, res) {
   const { email, otp } = req.body;
-  const user = await User.findOne({ email }).select('+tokenVersion');
+  // Client sign-ups only; staff accounts are activated through their invite.
+  const user = await User.findOne({ email, role: 'client' }).select('+tokenVersion');
   if (!user) throw new ApiError(400, 'This code has expired or is invalid. Please request a new one.');
   if (user.isVerified) throw new ApiError(400, 'This email is already verified. Please log in.', undefined, { code: 'ALREADY_VERIFIED' });
 
@@ -61,7 +58,7 @@ export async function resendOtp(req, res) {
 
   if (purpose === 'reset-password') return sendResetCode(email, res);
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email, role: 'client' });
   if (!user) throw new ApiError(404, 'No sign-up found for that email. Please create an account.');
   if (user.isVerified) throw new ApiError(400, 'This email is already verified. Please log in.', undefined, { code: 'ALREADY_VERIFIED' });
 
@@ -72,13 +69,9 @@ export async function resendOtp(req, res) {
 // POST /api/auth/login
 export async function login(req, res) {
   const { email, password } = req.body;
-  const user = await User.findOne({ email }).select('+password +tokenVersion');
-
-  // Same message for unknown email and wrong password so attackers can't
-  // discover which emails are registered.
-  if (!user || !(await user.matchPassword(password))) {
-    throw new ApiError(401, 'Invalid email or password.');
-  }
+  // Same message for unknown email and wrong password, constant-time for both,
+  // and the account locks after repeated failures (see utils/credentials.js).
+  const user = await verifyCredentials(email, password);
 
   // Only revealed after the correct password, so it leaks nothing to guessers.
   if (!user.isVerified) {
@@ -88,7 +81,52 @@ export async function login(req, res) {
     });
   }
 
-  res.json({ token: signToken(user), user });
+  await recordLogin(user);
+  // Clients get a client session; staff get a staff-portal session.
+  res.json({ token: signToken(user, scopeForRole(user.role)), user });
+}
+
+// ---------- Staff account activation ----------
+// An admin's invite creates an inactive staff login and emails a code.
+// The staff member proves they own the inbox and chooses their password here.
+
+const invalidInvite = () =>
+  new ApiError(400, 'This code is invalid or has expired. Ask an administrator to send a new invite.', undefined, { code: 'INVITE_INVALID' });
+
+async function pendingStaffUser(email) {
+  const user = await User.findOne({ email, role: 'staff' }).select('+tokenVersion');
+  if (!user) return null;
+  // The login must still be linked to a staff record (the admin may have revoked it).
+  return (await Staff.exists({ user: user._id })) ? user : null;
+}
+
+// POST /api/auth/staff/activate   { email, otp, password }
+export async function activateStaff(req, res) {
+  const { email, otp, password } = req.body;
+  const user = await pendingStaffUser(email);
+  if (!user) throw invalidInvite();
+  if (user.isVerified) {
+    throw new ApiError(400, 'This account is already set up. Please log in.', undefined, { code: 'ALREADY_ACTIVE' });
+  }
+
+  await verifyOtp({ email, purpose: 'staff-invite', code: otp });
+  user.password = password;
+  user.isVerified = true;
+  await user.save();
+  await clearOtp(email, 'staff-invite');
+  await recordLogin(user);
+
+  res.json({ token: signToken(user, SCOPES.STAFF), user });
+}
+
+// POST /api/auth/staff/resend   { email }
+// Same response whether or not there is a pending invite for this email.
+export async function resendStaffInvite(req, res) {
+  const { email } = req.body;
+  const user = await pendingStaffUser(email);
+  const deliver = Boolean(user && !user.isVerified);
+  const otp = await issueOtp({ email, purpose: 'staff-invite', name: user?.name, deliver });
+  res.json({ message: `If there is a pending invite for ${email}, we sent a new code to it.`, ...otp });
 }
 
 // Shared by /forgot-password and /resend-otp (reset). The response is the same
@@ -124,6 +162,7 @@ export async function resetPassword(req, res) {
     });
   }
 
+  assertAdminPasswordStrength(user, password);
   user.password = password;
   // Receiving the code proves they own the inbox.
   user.isVerified = true;

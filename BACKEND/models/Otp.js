@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 
-export const OTP_PURPOSES = ['verify-email', 'reset-password'];
+export const OTP_PURPOSES = ['verify-email', 'reset-password', 'change-email', 'admin-login', 'staff-invite'];
+// Purposes a logged-out user may request via /auth/resend-otp.
+export const PUBLIC_OTP_PURPOSES = ['verify-email', 'reset-password'];
 
 // One document per (email, purpose). It holds the current code (hashed) and
 // the counters used for resend cooldowns, hourly send limits and wrong-attempt limits.
@@ -8,6 +10,8 @@ const otpSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, lowercase: true, trim: true },
     purpose: { type: String, enum: OTP_PURPOSES, required: true },
+    // For 'change-email': the account that asked to move to this address.
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     codeHash: { type: String, default: null },
     codeExpiresAt: { type: Date, default: null },

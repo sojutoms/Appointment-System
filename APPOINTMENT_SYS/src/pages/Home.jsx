@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import Button from 'react-bootstrap/Button';
-import Card from 'react-bootstrap/Card';
-import Container from 'react-bootstrap/Container';
-import Placeholder from 'react-bootstrap/Placeholder';
+import { Link as RouterLink } from 'react-router-dom';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Chip from '@mui/material/Chip';
+import Container from '@mui/material/Container';
+import Grid from '@mui/material/Grid';
+import Skeleton from '@mui/material/Skeleton';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import EventAvailableRoundedIcon from '@mui/icons-material/EventAvailableRounded';
+import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined';
+import PersonAddAltRoundedIcon from '@mui/icons-material/PersonAddAltRounded';
 import api from '../api/axios';
+import IconBadge from '../components/IconBadge';
+import ServiceCard from '../components/ServiceCard';
+import useAuth from '../hooks/useAuth';
 
 const STEPS = [
-  { icon: 'bi-person-plus', title: 'Create an account', text: 'Sign up free with your email.' },
-  { icon: 'bi-list-check', title: 'Choose a service', text: 'Pick what you need and who you want to see.' },
-  { icon: 'bi-calendar-event', title: 'Pick a time', text: 'Only open slots are shown, so no double-booking.' },
+  { icon: PersonAddAltRoundedIcon, title: 'Create an account', text: 'Sign up free and verify your email.' },
+  { icon: FactCheckOutlinedIcon, title: 'Choose a service', text: 'Pick what you need and who you want to see.' },
+  { icon: EventAvailableRoundedIcon, title: 'Pick a time', text: 'Only open slots are shown, so no double-booking.' },
 ];
 
-const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 });
-
 export default function Home() {
+  const { user } = useAuth();
   const [services, setServices] = useState(null);
 
   useEffect(() => {
@@ -26,86 +37,87 @@ export default function Home() {
 
   return (
     <>
-      <section className="hero">
-        <Container className="py-5">
-          <div className="col-lg-7 py-lg-4">
-            <span className="badge rounded-pill text-bg-light border mb-3">Online Appointment System</span>
-            <h1 className="display-5 fw-semibold mb-3">Book your next appointment in under a minute.</h1>
-            <p className="lead text-body-secondary mb-4">
+      <Box
+        component="section"
+        sx={{
+          borderBottom: 1,
+          borderColor: 'divider',
+          background: (theme) =>
+            `radial-gradient(circle at 85% 20%, rgba(${theme.vars.palette.primary.mainChannel} / 0.14), transparent 45%)`,
+        }}
+      >
+        <Container sx={{ py: { xs: 7, md: 10 } }}>
+          <Box sx={{ maxWidth: 680 }}>
+            <Chip label="Online Appointment System" variant="outlined" size="small" sx={{ mb: 2 }} />
+            <Typography variant="h2" component="h1" sx={{ fontSize: { xs: '2.2rem', md: '3.2rem' }, mb: 2 }}>
+              Book your next appointment in under a minute.
+            </Typography>
+            <Typography variant="h6" component="p" color="text.secondary" sx={{ fontWeight: 400, mb: 4 }}>
               See real-time availability, choose a time that suits you, and manage every booking in one place.
-            </p>
-            <div className="d-flex flex-wrap gap-2">
-              <Button as={Link} to="/register" size="lg">
-                Get started
-              </Button>
-              <Button as={Link} to="/login" size="lg" variant="outline-secondary">
-                I already have an account
-              </Button>
-            </div>
-          </div>
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              {user ? (
+                <Button component={RouterLink} to="/book" variant="contained" size="large">
+                  Book an appointment
+                </Button>
+              ) : (
+                <>
+                  <Button component={RouterLink} to="/register" variant="contained" size="large">
+                    Get started
+                  </Button>
+                  <Button component={RouterLink} to="/login" variant="outlined" size="large">
+                    I already have an account
+                  </Button>
+                </>
+              )}
+            </Stack>
+          </Box>
         </Container>
-      </section>
+      </Box>
 
-      <Container className="py-5">
-        <h2 className="h4 fw-semibold mb-4">How it works</h2>
-        <div className="row g-3 mb-5">
+      <Container sx={{ py: 6 }}>
+        <Typography variant="h5" component="h2" sx={{ mb: 3 }}>
+          How it works
+        </Typography>
+        <Grid container spacing={2} sx={{ mb: 6 }}>
           {STEPS.map((step, i) => (
-            <div className="col-md-4" key={step.title}>
-              <Card className="h-100 border-0 shadow-sm">
-                <Card.Body>
-                  <span className="step-icon mb-3">
-                    <i className={`bi ${step.icon}`} />
-                  </span>
-                  <Card.Title as="h3" className="h6 fw-semibold">
+            <Grid key={step.title} size={{ xs: 12, md: 4 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <IconBadge icon={step.icon} sx={{ mb: 2 }} />
+                  <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 600 }}>
                     {i + 1}. {step.title}
-                  </Card.Title>
-                  <Card.Text className="text-body-secondary small">{step.text}</Card.Text>
-                </Card.Body>
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {step.text}
+                  </Typography>
+                </CardContent>
               </Card>
-            </div>
+            </Grid>
           ))}
-        </div>
+        </Grid>
 
-        <h2 className="h4 fw-semibold mb-4">Our services</h2>
-        <div className="row g-3">
+        <Typography variant="h5" component="h2" sx={{ mb: 3 }}>
+          Our services
+        </Typography>
+        <Grid container spacing={2}>
           {services === null &&
             [1, 2, 3].map((n) => (
-              <div className="col-md-4" key={n}>
-                <Card className="h-100">
-                  <Card.Body>
-                    <Placeholder as={Card.Title} animation="glow">
-                      <Placeholder xs={7} />
-                    </Placeholder>
-                    <Placeholder as={Card.Text} animation="glow">
-                      <Placeholder xs={10} /> <Placeholder xs={6} />
-                    </Placeholder>
-                  </Card.Body>
-                </Card>
-              </div>
+              <Grid key={n} size={{ xs: 12, sm: 6, md: 4 }}>
+                <Skeleton variant="rounded" height={150} />
+              </Grid>
             ))}
           {services?.length === 0 && (
-            <p className="text-body-secondary">Services will appear here once they are added.</p>
+            <Grid size={12}>
+              <Typography color="text.secondary">Services will appear here once they are added.</Typography>
+            </Grid>
           )}
           {services?.map((service) => (
-            <div className="col-md-6 col-lg-4" key={service._id}>
-              <Card className="h-100 service-card">
-                <Card.Body className="d-flex flex-column">
-                  <Card.Title as="h3" className="h6 fw-semibold">
-                    {service.name}
-                  </Card.Title>
-                  <Card.Text className="text-body-secondary small flex-grow-1">{service.description}</Card.Text>
-                  <div className="d-flex justify-content-between small">
-                    <span>
-                      <i className="bi bi-clock me-1" />
-                      {service.durationMinutes} min
-                    </span>
-                    <span className="fw-semibold">{peso.format(service.price)}</span>
-                  </div>
-                </Card.Body>
-              </Card>
-            </div>
+            <Grid key={service._id} size={{ xs: 12, sm: 6, md: 4 }}>
+              <ServiceCard service={service} />
+            </Grid>
           ))}
-        </div>
+        </Grid>
       </Container>
     </>
   );

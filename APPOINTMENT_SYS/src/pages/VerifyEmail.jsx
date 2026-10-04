@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import Alert from 'react-bootstrap/Alert';
-import Button from 'react-bootstrap/Button';
-import Spinner from 'react-bootstrap/Spinner';
+import { Navigate, Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Link from '@mui/material/Link';
+import Typography from '@mui/material/Typography';
+import MarkEmailReadOutlinedIcon from '@mui/icons-material/MarkEmailReadOutlined';
 import api from '../api/axios';
+import IconBadge from '../components/IconBadge';
 import OtpInput from '../components/OtpInput';
 import ResendCode from '../components/ResendCode';
+import SubmitButton from '../components/SubmitButton';
 import useAuth from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errors';
 import { clearPendingEmail, getCooldownUntil, getPendingEmail, startCooldown } from '../utils/otpSession';
@@ -40,8 +44,7 @@ export default function VerifyEmail() {
       clearPendingEmail();
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      const data = err.response?.data;
-      if (data?.code === 'ALREADY_VERIFIED') {
+      if (err.response?.data?.code === 'ALREADY_VERIFIED') {
         clearPendingEmail();
         navigate('/login', { replace: true, state: { message: 'Your email is already verified. Please log in.' } });
         return;
@@ -69,23 +72,31 @@ export default function VerifyEmail() {
 
   return (
     <>
-      <div className="otp-hero-icon mb-3">
-        <i className="bi bi-envelope-check" />
-      </div>
-      <h1 className="h3 fw-semibold mb-1">Check your email</h1>
-      <p className="text-body-secondary mb-4">
-        We sent a 6-digit code to <span className="fw-semibold text-body text-break">{email}</span>. It expires in 10
-        minutes.
-      </p>
+      <IconBadge icon={MarkEmailReadOutlinedIcon} size={52} sx={{ mb: 2 }} />
+      <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
+        Check your email
+      </Typography>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>
+        We sent a 6-digit code to{' '}
+        <Box component="span" sx={{ fontWeight: 600, color: 'text.primary', wordBreak: 'break-all' }}>
+          {email}
+        </Box>
+        . It expires in 10 minutes.
+      </Typography>
 
       {notice && (
-        <Alert variant="success" onClose={() => setNotice('')} dismissible>
+        <Alert severity="success" onClose={() => setNotice('')} sx={{ mb: 2 }}>
           {notice}
         </Alert>
       )}
-      {error && <Alert variant="danger">{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
-      <form
+      <Box
+        component="form"
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
@@ -93,34 +104,21 @@ export default function VerifyEmail() {
         }}
       >
         <OtpInput value={code} onChange={setCode} onComplete={submit} disabled={submitting} invalid={Boolean(error)} />
+        <SubmitButton busy={submitting} busyText="Verifying..." disabled={code.trim().length !== 6} sx={{ mt: 3 }}>
+          Verify email
+        </SubmitButton>
+      </Box>
 
-        <Button type="submit" className="w-100 mt-4" size="lg" disabled={submitting || code.trim().length !== 6}>
-          {submitting ? (
-            <>
-              <Spinner size="sm" className="me-2" />
-              Verifying...
-            </>
-          ) : (
-            'Verify email'
-          )}
-        </Button>
-      </form>
-
-      <div className="mt-4">
+      <Box sx={{ mt: 3 }}>
         <ResendCode cooldownUntil={cooldownUntil} onResend={resend} disabled={submitting} />
-      </div>
+      </Box>
 
-      <p className="text-center text-body-secondary small mt-4 mb-0">
+      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 3 }}>
         Wrong email?{' '}
-        <Link
-          to="/register"
-          onClick={() => {
-            clearPendingEmail();
-          }}
-        >
+        <Link component={RouterLink} to="/register" onClick={clearPendingEmail}>
           Sign up again
         </Link>
-      </p>
+      </Typography>
     </>
   );
 }

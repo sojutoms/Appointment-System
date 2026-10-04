@@ -1,22 +1,26 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import Alert from 'react-bootstrap/Alert';
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import ProgressBar from 'react-bootstrap/ProgressBar';
-import Spinner from 'react-bootstrap/Spinner';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Grid from '@mui/material/Grid';
+import LinearProgress from '@mui/material/LinearProgress';
+import Link from '@mui/material/Link';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import PasswordField from '../components/PasswordField';
+import SubmitButton from '../components/SubmitButton';
 import useAuth from '../hooks/useAuth';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
 import { setPendingEmail, startCooldown } from '../utils/otpSession';
 import { passwordStrength, validateRegister } from '../utils/validation';
 
 const STRENGTH = [
-  { label: 'Too weak', variant: 'danger' },
-  { label: 'Weak', variant: 'danger' },
-  { label: 'Fair', variant: 'warning' },
-  { label: 'Good', variant: 'info' },
-  { label: 'Strong', variant: 'success' },
+  { label: 'Too weak', color: 'error' },
+  { label: 'Weak', color: 'error' },
+  { label: 'Fair', color: 'warning' },
+  { label: 'Good', color: 'info' },
+  { label: 'Strong', color: 'success' },
 ];
 
 const INITIAL = { name: '', email: '', phone: '', password: '', confirmPassword: '' };
@@ -30,7 +34,8 @@ export default function Register() {
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const strength = STRENGTH[passwordStrength(form.password)];
+  const score = passwordStrength(form.password);
+  const strength = STRENGTH[score];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -75,109 +80,104 @@ export default function Register() {
 
   return (
     <>
-      <h1 className="h3 fw-semibold mb-1">Create your account</h1>
-      <p className="text-body-secondary mb-4">It only takes a minute to start booking.</p>
+      <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
+        Create your account
+      </Typography>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>
+        It only takes a minute to start booking.
+      </Typography>
 
       {serverError && (
-        <Alert variant="danger" onClose={() => setServerError('')} dismissible>
+        <Alert severity="error" onClose={() => setServerError('')} sx={{ mb: 2 }}>
           {serverError}
         </Alert>
       )}
 
-      <Form noValidate onSubmit={handleSubmit}>
-        <Form.Group className="mb-3" controlId="name">
-          <Form.Label>Full name</Form.Label>
-          <Form.Control
+      <Box component="form" noValidate onSubmit={handleSubmit}>
+        <Stack spacing={2.5}>
+          <TextField
+            label="Full name"
             name="name"
             placeholder="Juan Dela Cruz"
             autoComplete="name"
             autoFocus
             value={form.name}
             onChange={handleChange}
-            isInvalid={Boolean(errors.name)}
+            error={Boolean(errors.name)}
+            helperText={errors.name}
           />
-          <Form.Control.Feedback type="invalid">{errors.name}</Form.Control.Feedback>
-        </Form.Group>
-
-        <div className="row g-3 mb-3">
-          <Form.Group className="col-sm-7" controlId="email">
-            <Form.Label>Email</Form.Label>
-            <Form.Control
-              type="email"
-              name="email"
-              placeholder="you@example.com"
-              autoComplete="email"
-              value={form.email}
+          <Grid container spacing={2.5}>
+            <Grid size={{ xs: 12, sm: 7 }}>
+              <TextField
+                label="Email"
+                type="email"
+                name="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                value={form.email}
+                onChange={handleChange}
+                error={Boolean(errors.email)}
+                helperText={errors.email}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 5 }}>
+              <TextField
+                label="Phone (optional)"
+                type="tel"
+                name="phone"
+                placeholder="0917 123 4567"
+                autoComplete="tel"
+                value={form.phone}
+                onChange={handleChange}
+                error={Boolean(errors.phone)}
+                helperText={errors.phone}
+              />
+            </Grid>
+          </Grid>
+          <Box>
+            <PasswordField
+              label="Password"
+              name="password"
+              autoComplete="new-password"
+              value={form.password}
               onChange={handleChange}
-              isInvalid={Boolean(errors.email)}
+              error={errors.password}
+              helperText="At least 8 characters, with a letter and a number"
             />
-            <Form.Control.Feedback type="invalid">{errors.email}</Form.Control.Feedback>
-          </Form.Group>
+            {form.password && (
+              <Box sx={{ mt: 1 }} aria-live="polite">
+                <LinearProgress
+                  variant="determinate"
+                  value={Math.max(5, (score / 4) * 100)}
+                  color={strength.color}
+                  sx={{ height: 6, borderRadius: 3 }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Strength: {strength.label}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <PasswordField
+            label="Confirm password"
+            name="confirmPassword"
+            autoComplete="new-password"
+            value={form.confirmPassword}
+            onChange={handleChange}
+            error={errors.confirmPassword}
+          />
+          <SubmitButton busy={submitting} busyText="Sending verification code...">
+            Create account
+          </SubmitButton>
+        </Stack>
+      </Box>
 
-          <Form.Group className="col-sm-5" controlId="phone">
-            <Form.Label>
-              Phone <span className="text-body-secondary fw-normal">(optional)</span>
-            </Form.Label>
-            <Form.Control
-              type="tel"
-              name="phone"
-              placeholder="0917 123 4567"
-              autoComplete="tel"
-              value={form.phone}
-              onChange={handleChange}
-              isInvalid={Boolean(errors.phone)}
-            />
-            <Form.Control.Feedback type="invalid">{errors.phone}</Form.Control.Feedback>
-          </Form.Group>
-        </div>
-
-        <PasswordField
-          id="password"
-          label="Password"
-          name="password"
-          placeholder="At least 8 characters, with a letter and a number"
-          autoComplete="new-password"
-          value={form.password}
-          onChange={handleChange}
-          error={errors.password}
-        />
-        {form.password && (
-          <div className="password-meter mb-3" aria-live="polite">
-            <ProgressBar
-              now={(passwordStrength(form.password) / 4) * 100 || 5}
-              variant={strength.variant}
-              style={{ height: 6 }}
-            />
-            <small className="text-body-secondary">Strength: {strength.label}</small>
-          </div>
-        )}
-
-        <PasswordField
-          id="confirmPassword"
-          label="Confirm password"
-          name="confirmPassword"
-          placeholder="Re-enter your password"
-          autoComplete="new-password"
-          value={form.confirmPassword}
-          onChange={handleChange}
-          error={errors.confirmPassword}
-        />
-
-        <Button type="submit" className="w-100 mt-2" size="lg" disabled={submitting}>
-          {submitting ? (
-            <>
-              <Spinner size="sm" className="me-2" />
-              Sending verification code...
-            </>
-          ) : (
-            'Create account'
-          )}
-        </Button>
-      </Form>
-
-      <p className="text-center text-body-secondary mt-4 mb-0">
-        Already have an account? <Link to="/login">Log in</Link>
-      </p>
+      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 3 }}>
+        Already have an account?{' '}
+        <Link component={RouterLink} to="/login">
+          Log in
+        </Link>
+      </Typography>
     </>
   );
 }

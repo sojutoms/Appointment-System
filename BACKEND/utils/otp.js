@@ -13,6 +13,10 @@ export const OTP_RULES = {
   resetTokenMinutes: 10,
 };
 
+// Staff invites can't be expected to be opened within 10 minutes.
+const EXPIRY_MINUTES = { 'staff-invite': 24 * 60 };
+const expiryMinutes = (purpose) => EXPIRY_MINUTES[purpose] ?? OTP_RULES.expiresInMinutes;
+
 const HOUR = 60 * 60 * 1000;
 const seconds = (ms) => Math.max(1, Math.ceil(ms / 1000));
 
@@ -34,10 +38,11 @@ const generateCode = () => crypto.randomInt(0, 10 ** OTP_RULES.length).toString(
  * "forgot password" responses identical whether or not the account exists.
  * Returns { resendAvailableIn, expiresIn } in seconds.
  */
-export async function issueOtp({ email, purpose, name, deliver = true }) {
+export async function issueOtp({ email, purpose, name, userId = null, deliver = true }) {
   const now = new Date();
   let otp = await Otp.findOne({ email, purpose });
   if (!otp) otp = new Otp({ email, purpose });
+  otp.user = userId;
 
   if (!otp.windowStartedAt || now - otp.windowStartedAt >= HOUR) {
     otp.windowStartedAt = now;
@@ -69,21 +74,23 @@ export async function issueOtp({ email, purpose, name, deliver = true }) {
 
   // The code is stored even when not delivered, so wrong guesses behave the
   // same way for unknown emails (no hint about which emails have accounts).
+  const minutes = expiryMinutes(purpose);
   otp.set({
     codeHash: hash(code),
-    codeExpiresAt: new Date(now.getTime() + OTP_RULES.expiresInMinutes * 60 * 1000),
+    codeExpiresAt: new Date(now.getTime() + minutes * 60 * 1000),
     attempts: 0,
     resetTokenHash: null,
     resetTokenExpiresAt: null,
     sendCount: otp.sendCount + 1,
     lastSentAt: now,
-    purgeAt: new Date(Math.max(otp.windowStartedAt.getTime() + HOUR, now.getTime() + 30 * 60 * 1000)),
+    // Keep the record (and its limits) until well after the code expires.
+    purgeAt: new Date(Math.max(otp.windowStartedAt.getTime() + HOUR, now.getTime() + (minutes + 30) * 60 * 1000)),
   });
   await otp.save();
 
   if (deliver) {
     try {
-      await sendOtpEmail({ to: email, name, code, purpose, expiresInMinutes: OTP_RULES.expiresInMinutes });
+      await sendOtpEmail({ to: email, name, code, purpose, expiresInMinutes: minutes });
     } catch (err) {
       // The email never went out, so don't count it against the user's limits.
       otp.set({ ...previous, codeHash: null });
@@ -92,18 +99,20 @@ export async function issueOtp({ email, purpose, name, deliver = true }) {
     }
   }
 
-  return { resendAvailableIn: OTP_RULES.resendCooldownSeconds, expiresIn: OTP_RULES.expiresInMinutes * 60 };
+  return { resendAvailableIn: OTP_RULES.resendCooldownSeconds, expiresIn: minutes * 60 };
 }
 
 /**
  * Checks a code. Wrong codes count toward the attempt limit; a correct code
  * is consumed so it can't be reused. Returns the Otp document on success.
  */
-export async function verifyOtp({ email, purpose, code }) {
+export async function verifyOtp({ email, purpose, code, userId }) {
   const otp = await Otp.findOne({ email, purpose });
   const now = new Date();
+  // For account-bound codes (email change), the code only works for the user who requested it.
+  const wrongUser = userId && !otp?.user?.equals(userId);
 
-  if (!otp?.codeHash || !otp.codeExpiresAt || otp.codeExpiresAt < now) {
+  if (!otp?.codeHash || !otp.codeExpiresAt || otp.codeExpiresAt < now || wrongUser) {
     throw new ApiError(400, 'This code has expired or is invalid. Please request a new one.', undefined, {
       code: 'OTP_EXPIRED',
     });
