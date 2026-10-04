@@ -21,23 +21,30 @@ export default function RescheduleDialog({ appointment, onClose, onSaved }) {
   const [slotsData, setSlotsData] = useState({ key: null, slots: [], message: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+
+  // Bookings are allowed from today up to 60 days ahead (the picker's min/max
+  // only guide the calendar; a typed date can be anything).
+  const today = todayString();
+  const lastDay = addDays(today, 60);
+  const dateError = date && (date < today || date > lastDay) ? `Choose a date between today and ${formatDate(lastDay)}.` : '';
 
   const serviceId = appointment.service?._id;
   const staffId = appointment.staff?._id;
-  const key = serviceId && staffId && date ? `${date}` : null;
+  const key = serviceId && staffId && date && !dateError ? `${date}|${refresh}` : null;
   const loading = Boolean(key) && slotsData.key !== key;
 
   useEffect(() => {
     if (!key) return undefined;
     let active = true;
     api
-      .get('/appointments/available-slots', { params: { service: serviceId, staff: staffId, date: key, exclude: appointment._id } })
+      .get('/appointments/available-slots', { params: { service: serviceId, staff: staffId, date, exclude: appointment._id } })
       .then(({ data }) => active && setSlotsData({ key, slots: data.slots, message: data.message || '' }))
       .catch((err) => active && setSlotsData({ key, slots: [], message: getErrorMessage(err) }));
     return () => {
       active = false;
     };
-  }, [key, serviceId, staffId, appointment._id]);
+  }, [key, date, serviceId, staffId, appointment._id]);
 
   const save = async () => {
     setBusy(true);
@@ -47,6 +54,9 @@ export default function RescheduleDialog({ appointment, onClose, onSaved }) {
       onSaved();
     } catch (err) {
       setError(getErrorMessage(err));
+      // The chosen time may have just been taken: reload the free times.
+      setSlot(null);
+      setRefresh((n) => n + 1);
       setBusy(false);
     }
   };
@@ -76,7 +86,9 @@ export default function RescheduleDialog({ appointment, onClose, onSaved }) {
             setDate(e.target.value);
             setSlot(null);
           }}
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: todayString(), max: addDays(todayString(), 60) } }}
+          error={Boolean(dateError)}
+          helperText={dateError}
+          slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: today, max: lastDay } }}
           sx={{ mb: 2, maxWidth: 240 }}
         />
         {loading && <Skeleton variant="rounded" height={88} />}

@@ -98,3 +98,12 @@ export function sendOtpEmail({ to, name, code, purpose, expiresInMinutes }) {
 
   return sendEmail({ to, toName: name, subject: copy.subject(app), html, text });
 }
+
+// Security notice to the OLD address after an email change, so the owner
+// finds out if someone else changed it.
+export function sendEmailChangedNotice({ to, name, newEmail }) {
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+  const text = `${greeting}\n\nThe email address for your account was changed to ${newEmail}. You will no longer receive account emails at this address.\n\nIf you didn't make this change, contact us right away so we can secure your account.`;
+  const html = `<p>${escapeHtml(greeting)}</p><p>The email address for your account was changed to <strong>${escapeHtml(newEmail)}</strong>. You will no longer receive account emails at this address.</p><p>If you didn't make this change, contact us right away so we can secure your account.</p>`;
+  return sendEmail({ to, toName: name, subject: 'Your account email was changed', html, text });
+}

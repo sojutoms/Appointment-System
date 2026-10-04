@@ -3,27 +3,21 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
-import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import PasswordField from '../components/PasswordField';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
+import PhoneField from '../components/PhoneField';
 import SubmitButton from '../components/SubmitButton';
 import useAuth from '../hooks/useAuth';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
 import { setPendingEmail, startCooldown } from '../utils/otpSession';
-import { passwordStrength, validateRegister } from '../utils/validation';
+import { cleanNameInput, DEFAULT_PHONE_COUNTRY, LIMITS, toE164, validateRegister } from '../utils/validation';
 
-const STRENGTH = [
-  { label: 'Too weak', color: 'error' },
-  { label: 'Weak', color: 'error' },
-  { label: 'Fair', color: 'warning' },
-  { label: 'Good', color: 'info' },
-  { label: 'Strong', color: 'success' },
-];
-
-const INITIAL = { name: '', email: '', phone: '', password: '', confirmPassword: '' };
+const INITIAL = { firstName: '', lastName: '', email: '', phone: '', phoneCountry: DEFAULT_PHONE_COUNTRY, password: '', confirmPassword: '' };
+const NAME_FIELDS = new Set(['firstName', 'lastName']);
 
 export default function Register() {
   const { register } = useAuth();
@@ -34,12 +28,9 @@ export default function Register() {
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const score = passwordStrength(form.password);
-  const strength = STRENGTH[score];
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({ ...prev, [name]: NAME_FIELDS.has(name) ? cleanNameInput(value) : value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
@@ -55,9 +46,11 @@ export default function Register() {
     const email = form.email.trim().toLowerCase();
     try {
       const data = await register({
-        name: form.name.trim(),
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
         email,
-        phone: form.phone.trim(),
+        phone: toE164(form.phone, form.phoneCountry),
+        ...(form.phone && { phoneCountry: form.phoneCountry }),
         password: form.password,
       });
       setPendingEmail(email);
@@ -95,45 +88,56 @@ export default function Register() {
 
       <Box component="form" noValidate onSubmit={handleSubmit}>
         <Stack spacing={2.5}>
-          <TextField
-            label="Full name"
-            name="name"
-            placeholder="Juan Dela Cruz"
-            autoComplete="name"
-            autoFocus
-            value={form.name}
-            onChange={handleChange}
-            error={Boolean(errors.name)}
-            helperText={errors.name}
-          />
           <Grid container spacing={2.5}>
-            <Grid size={{ xs: 12, sm: 7 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Email"
-                type="email"
-                name="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                value={form.email}
+                label="First name"
+                name="firstName"
+                placeholder="Juan"
+                autoComplete="given-name"
+                autoFocus
+                value={form.firstName}
                 onChange={handleChange}
-                error={Boolean(errors.email)}
-                helperText={errors.email}
+                error={Boolean(errors.firstName)}
+                helperText={errors.firstName}
+                slotProps={{ htmlInput: { maxLength: LIMITS.name } }}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 5 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Phone (optional)"
-                type="tel"
-                name="phone"
-                placeholder="0917 123 4567"
-                autoComplete="tel"
-                value={form.phone}
+                label="Last name"
+                name="lastName"
+                placeholder="Dela Cruz"
+                autoComplete="family-name"
+                value={form.lastName}
                 onChange={handleChange}
-                error={Boolean(errors.phone)}
-                helperText={errors.phone}
+                error={Boolean(errors.lastName)}
+                helperText={errors.lastName}
+                slotProps={{ htmlInput: { maxLength: LIMITS.name } }}
               />
             </Grid>
           </Grid>
+          <TextField
+            label="Email"
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={form.email}
+            onChange={handleChange}
+            error={Boolean(errors.email)}
+            helperText={errors.email}
+            slotProps={{ htmlInput: { maxLength: LIMITS.email } }}
+          />
+          <PhoneField
+            label="Phone (optional)"
+            value={{ country: form.phoneCountry, number: form.phone }}
+            onChange={({ country, number }) => {
+              setForm((prev) => ({ ...prev, phoneCountry: country, phone: number }));
+              if (errors.phone) setErrors((prev) => ({ ...prev, phone: '' }));
+            }}
+            error={errors.phone}
+          />
           <Box>
             <PasswordField
               label="Password"
@@ -142,21 +146,9 @@ export default function Register() {
               value={form.password}
               onChange={handleChange}
               error={errors.password}
-              helperText="At least 8 characters, with a letter and a number"
+              helperText="8 to 32 characters, with a letter and a number"
             />
-            {form.password && (
-              <Box sx={{ mt: 1 }} aria-live="polite">
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.max(5, (score / 4) * 100)}
-                  color={strength.color}
-                  sx={{ height: 6, borderRadius: 3 }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Strength: {strength.label}
-                </Typography>
-              </Box>
-            )}
+            <PasswordStrengthMeter password={form.password} />
           </Box>
           <PasswordField
             label="Confirm password"

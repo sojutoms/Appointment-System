@@ -27,6 +27,7 @@ import IconBadge from '../../components/IconBadge';
 import StatusChip from '../../components/StatusChip';
 import StaffAppointmentDialog from '../../components/staff/StaffAppointmentDialog';
 import useToast from '../../hooks/useToast';
+import { clickable } from '../../utils/a11y';
 import { getErrorMessage } from '../../utils/errors';
 import { addDays, formatDate, formatTime, formatTimeRange, parseDate, relativeDay, todayString } from '../../utils/format';
 
@@ -55,7 +56,10 @@ export default function StaffSchedule() {
   const [pending, setPending] = useState(null);
   const [date, setDate] = useState(todayString);
   const [day, setDay] = useState({ date: null, appointments: [], timeOff: [] });
-  const [error, setError] = useState('');
+  // One error per data source, so a later successful load clears only its own error.
+  const [errors, setErrors] = useState({});
+  const setSourceError = (source, message) => setErrors((prev) => ({ ...prev, [source]: message }));
+  const error = Object.values(errors).find(Boolean);
   const [selected, setSelected] = useState(null);
   const [refresh, setRefresh] = useState(0);
   const [confirming, setConfirming] = useState('');
@@ -67,24 +71,46 @@ export default function StaffSchedule() {
   }, []);
 
   useEffect(() => {
-    api.get('/staff-portal/me').then(({ data }) => setProfile(data.staff)).catch((err) => setError(getErrorMessage(err)));
+    let active = true;
+    api
+      .get('/staff-portal/me')
+      .then(({ data }) => active && setProfile(data.staff))
+      .catch((err) => active && setSourceError('profile', getErrorMessage(err)));
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
+    let active = true;
     Promise.all([api.get('/staff-portal/summary'), api.get('/staff-portal/appointments', { params: { status: 'pending', scope: 'upcoming', limit: 5 } })])
       .then(([s, p]) => {
+        if (!active) return;
         setSummary(s.data);
         setPending(p.data);
+        setSourceError('summary', '');
       })
-      .catch((err) => setError(getErrorMessage(err)));
+      .catch((err) => active && setSourceError('summary', getErrorMessage(err)));
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   useEffect(() => {
     let active = true;
     api
       .get('/staff-portal/day', { params: { date } })
-      .then(({ data }) => active && setDay(data))
-      .catch((err) => active && setError(getErrorMessage(err)));
+      .then(({ data }) => {
+        if (!active) return;
+        setDay(data);
+        setSourceError('day', '');
+      })
+      .catch((err) => {
+        if (!active) return;
+        // Mark this date as loaded (empty) so the skeleton doesn't spin forever.
+        setDay({ date, appointments: [], timeOff: [] });
+        setSourceError('day', getErrorMessage(err));
+      });
     return () => {
       active = false;
     };
@@ -130,16 +156,16 @@ export default function StaffSchedule() {
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 6, md: 3 }}>
-          <StatCard icon={EventRoundedIcon} label="Today" value={summary?.today} color="primary" />
+          <StatCard icon={EventRoundedIcon} label="Today" value={errors.summary ? '—' : summary?.today} color="primary" />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
-          <StatCard icon={ViewWeekOutlinedIcon} label="Next 7 days" value={summary?.next7Days} color="info" />
+          <StatCard icon={ViewWeekOutlinedIcon} label="Next 7 days" value={errors.summary ? '—' : summary?.next7Days} color="info" />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
-          <StatCard icon={HourglassEmptyRoundedIcon} label="To confirm" value={summary?.pending} color="warning" />
+          <StatCard icon={HourglassEmptyRoundedIcon} label="To confirm" value={errors.summary ? '—' : summary?.pending} color="warning" />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
-          <StatCard icon={TaskAltRoundedIcon} label="Completed" value={summary?.completed} color="success" />
+          <StatCard icon={TaskAltRoundedIcon} label="Completed" value={errors.summary ? '—' : summary?.completed} color="success" />
         </Grid>
       </Grid>
 
@@ -212,13 +238,13 @@ export default function StaffSchedule() {
               </Typography>
             </Box>
             <Divider />
-            {pending === null && <Skeleton variant="rounded" height={120} sx={{ m: 2 }} />}
+            {pending === null && !errors.summary && <Skeleton variant="rounded" height={120} sx={{ m: 2 }} />}
             {pending?.items.length === 0 && <EmptyState icon={TaskAltRoundedIcon} title="All caught up" description="New bookings appear here." />}
             {pending?.items.map((appt, i) => (
               <Box key={appt._id}>
                 {i > 0 && <Divider />}
                 <Stack direction="row" spacing={1} sx={{ px: 2.5, py: 1.5, alignItems: 'center' }}>
-                  <Box sx={{ flexGrow: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => setSelected(appt)}>
+                  <Box sx={{ flexGrow: 1, minWidth: 0, cursor: 'pointer' }} {...clickable(() => setSelected(appt))}>
                     <Typography sx={{ fontWeight: 600 }} noWrap>
                       {appt.user?.name ?? 'Deleted account'}
                     </Typography>

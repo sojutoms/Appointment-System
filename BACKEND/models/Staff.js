@@ -4,9 +4,12 @@ const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const staffSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true, maxlength: 80 },
-    specialization: { type: String, trim: true, maxlength: 100, default: '' },
-    email: { type: String, trim: true, lowercase: true, maxlength: 120, default: '' },
+    // `name` is the combined display name, kept in sync with first/last below.
+    firstName: { type: String, trim: true, maxlength: 30 },
+    lastName: { type: String, trim: true, maxlength: 30 },
+    name: { type: String, required: true, trim: true, maxlength: 61 },
+    specialization: { type: String, trim: true, maxlength: 50, default: '' },
+    email: { type: String, trim: true, lowercase: true, maxlength: 64, default: '' },
     services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Service' }],
     // 0 = Sunday ... 6 = Saturday
     workingDays: {
@@ -21,6 +24,12 @@ const staffSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+staffSchema.pre('validate', function syncName() {
+  if (this.isModified('firstName') || this.isModified('lastName')) {
+    this.name = [this.firstName, this.lastName].filter(Boolean).join(' ');
+  }
+});
 
 staffSchema.index({ user: 1 }, { unique: true, partialFilterExpression: { user: { $type: 'objectId' } } });
 

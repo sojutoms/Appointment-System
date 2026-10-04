@@ -10,12 +10,12 @@ import {
   updateStaff,
 } from '../controllers/staffController.js';
 import { optionalAuth, protect, requireAdmin } from '../middleware/auth.js';
-import { createStaffRules, mongoIdParam, unavailableRules, updateStaffRules } from '../validators/rules.js';
+import { createStaffRules, mongoIdParam, publicListRules, unavailableRules, updateStaffRules } from '../validators/rules.js';
 
 const router = Router();
 
 // Public reads; staff emails and account status are only included for the admin panel.
-router.get('/', optionalAuth, listStaff);
+router.get('/', optionalAuth, publicListRules, listStaff);
 router.get('/:id', optionalAuth, mongoIdParam, getStaff);
 router.get('/:id/unavailable', unavailableRules, getUnavailableDates);
 

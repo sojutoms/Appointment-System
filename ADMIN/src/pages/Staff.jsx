@@ -35,13 +35,13 @@ import TimeOffDialog from '../components/TimeOffDialog';
 import TablePager from '../components/TablePager';
 import useApiList from '../hooks/useApiList';
 import useToast from '../hooks/useToast';
-import useUrlFilters from '../hooks/useUrlFilters';
+import useUrlFilters, { FILTER } from '../hooks/useUrlFilters';
 import { getErrorMessage } from '../utils/errors';
 import { formatTime, formatWorkingDays, initials } from '../utils/format';
 
 export default function Staff() {
   const showToast = useToast();
-  const [filters, setFilters] = useUrlFilters({ q: '' });
+  const [filters, setFilters] = useUrlFilters({ q: '' }, { q: FILTER.search });
   const { items, pagination, loading, error, reload } = useApiList('/staff', {
     includeInactive: true,
     search: filters.q,

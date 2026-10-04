@@ -9,9 +9,9 @@ import ApiError from '../utils/ApiError.js';
 import { audit } from '../utils/audit.js';
 import { clearOtp, issueOtp } from '../utils/otp.js';
 import { getPagination, paginated, searchRegex } from '../utils/query.js';
-import { addDays, nowInBusinessTz, toMinutes } from '../utils/time.js';
+import { addDays, dayOfWeek, nowInBusinessTz, toMinutes } from '../utils/time.js';
 
-const EDITABLE_FIELDS = ['name', 'specialization', 'email', 'services', 'workingDays', 'startTime', 'endTime', 'isActive'];
+const EDITABLE_FIELDS = ['firstName', 'lastName', 'specialization', 'email', 'services', 'workingDays', 'startTime', 'endTime', 'isActive'];
 const SERVICE_FIELDS = 'name durationMinutes price isActive';
 
 // Whitelist: only these fields can ever be written from a request (no mass assignment).
@@ -33,6 +33,37 @@ async function assertServicesExist(serviceIds) {
 function assertHours(startTime, endTime) {
   if (startTime && endTime && toMinutes(startTime) >= toMinutes(endTime)) {
     throw new ApiError(400, 'End time must be later than start time.');
+  }
+}
+
+// Changing working days, hours or services must not leave upcoming bookings
+// outside the new schedule (they could no longer be rescheduled or honoured).
+async function assertScheduleKeepsBookings(staff, data) {
+  const days = data.workingDays ?? staff.workingDays;
+  const start = toMinutes(data.startTime ?? staff.startTime);
+  const end = toMinutes(data.endTime ?? staff.endTime);
+  const services = (data.services ?? staff.services).map(String);
+
+  const upcoming = await Appointment.find({
+    staff: staff._id,
+    status: { $in: ACTIVE_STATUSES },
+    date: { $gte: nowInBusinessTz().date },
+  })
+    .select('date startTime endTime service')
+    .sort({ date: 1, startTime: 1 });
+  const stranded = upcoming.filter(
+    (a) =>
+      !days.includes(dayOfWeek(a.date)) ||
+      toMinutes(a.startTime) < start ||
+      toMinutes(a.endTime) > end ||
+      !services.includes(String(a.service))
+  );
+  if (stranded.length) {
+    const first = stranded[0];
+    throw new ApiError(
+      409,
+      `${stranded.length} upcoming appointment${stranded.length === 1 ? '' : 's'} (first on ${first.date} at ${first.startTime}) would fall outside the new working days, hours or services. Reschedule or cancel ${stranded.length === 1 ? 'it' : 'them'} first.`
+    );
   }
 }
 
@@ -80,7 +111,8 @@ export async function getStaff(req, res) {
   let query = Staff.findById(req.params.id).populate('services', SERVICE_FIELDS);
   if (admin) query = query.populate('user', 'isVerified lastLoginAt');
   const staff = await query;
-  if (!staff) throw new ApiError(404, 'Staff member not found.');
+  // Inactive staff are hidden from everyone but the admin panel.
+  if (!staff || (!staff.isActive && !admin)) throw new ApiError(404, 'Staff member not found.');
   res.json({ staff: present(staff, admin) });
 }
 
@@ -88,8 +120,11 @@ export async function getStaff(req, res) {
 // Days the person is fully off, so the booking calendar can grey them out.
 // Only dates are returned, never the reason.
 export async function getUnavailableDates(req, res) {
-  const from = req.query.from || nowInBusinessTz().date;
-  const to = req.query.to || addDays(from, 60);
+  // Only today onwards and at most ~4 months at a time: past leave is nobody's business.
+  const today = nowInBusinessTz().date;
+  const from = req.query.from && req.query.from > today ? req.query.from : today;
+  const latest = addDays(from, 120);
+  const to = req.query.to && req.query.to < latest ? req.query.to : latest;
   const entries = await TimeOff.find({ staff: req.params.id, allDay: true, date: { $gte: from, $lte: to } }).select('date');
   res.json({ dates: [...new Set(entries.map((e) => e.date))].sort() });
 }
@@ -116,6 +151,7 @@ export async function updateStaff(req, res) {
   }
   assertHours(data.startTime ?? staff.startTime, data.endTime ?? staff.endTime);
   await assertServicesExist(data.services);
+  await assertScheduleKeepsBookings(staff, data);
   staff.set(data);
   await staff.save();
 
@@ -171,6 +207,8 @@ export async function inviteStaff(req, res) {
     // their own when they activate the account with the emailed code.
     const user = await User.create({
       name: staff.name,
+      firstName: staff.firstName,
+      lastName: staff.lastName,
       email: staff.email,
       password: crypto.randomBytes(32).toString('base64url'),
       role: 'staff',

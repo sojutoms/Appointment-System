@@ -16,6 +16,7 @@ import TextField from '@mui/material/TextField';
 import api from '../api/axios';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
 import { formatDuration } from '../utils/format';
+import { LIMITS, validatePrice, validateServiceName } from '../utils/validation';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
 
@@ -41,18 +42,19 @@ export default function ServiceFormDialog({ service, onClose, onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const nextErrors = {};
-    if (!form.name.trim()) nextErrors.name = 'Name is required.';
-    else if (form.name.trim().length > 100) nextErrors.name = 'Name is too long.';
-    if (form.description.length > 500) nextErrors.description = 'Description must be 500 characters or less.';
+    const nameError = validateServiceName(form.name);
+    if (nameError) nextErrors.name = nameError;
+    if (form.description.length > LIMITS.description) nextErrors.description = `Description must be ${LIMITS.description} characters or less.`;
+    const priceError = validatePrice(form.price.trim());
+    if (priceError) nextErrors.price = priceError;
     const price = Number(form.price);
-    if (form.price === '' || Number.isNaN(price) || price < 0) nextErrors.price = 'Enter a price of 0 or more.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
     setBusy(true);
     setError('');
     const payload = {
-      name: form.name.trim(),
+      name: form.name.replace(/\s+/g, ' ').trim(),
       description: form.description.trim(),
       durationMinutes: Number(form.durationMinutes),
       price,
@@ -79,7 +81,7 @@ export default function ServiceFormDialog({ service, onClose, onSaved }) {
             </Alert>
           )}
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            <TextField label="Name" autoFocus value={form.name} onChange={(e) => set('name', e.target.value)} error={Boolean(errors.name)} helperText={errors.name} slotProps={{ htmlInput: { maxLength: 100 } }} />
+            <TextField label="Name" autoFocus value={form.name} onChange={(e) => set('name', e.target.value)} error={Boolean(errors.name)} helperText={errors.name} slotProps={{ htmlInput: { maxLength: LIMITS.serviceName } }} />
             <TextField
               label="Description"
               multiline
@@ -87,8 +89,8 @@ export default function ServiceFormDialog({ service, onClose, onSaved }) {
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
               error={Boolean(errors.description)}
-              helperText={errors.description || `${form.description.length}/500`}
-              slotProps={{ htmlInput: { maxLength: 500 } }}
+              helperText={errors.description || `${form.description.length}/${LIMITS.description}`}
+              slotProps={{ htmlInput: { maxLength: LIMITS.description } }}
             />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField select label="Duration" value={form.durationMinutes} onChange={(e) => set('durationMinutes', e.target.value)}>
@@ -105,9 +107,13 @@ export default function ServiceFormDialog({ service, onClose, onSaved }) {
                 type="number"
                 value={form.price}
                 onChange={(e) => set('price', e.target.value)}
+                onKeyDown={(e) => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()}
                 error={Boolean(errors.price)}
                 helperText={errors.price}
-                slotProps={{ input: { startAdornment: <InputAdornment position="start">₱</InputAdornment> }, htmlInput: { min: 0, step: 50 } }}
+                slotProps={{
+                  input: { startAdornment: <InputAdornment position="start">₱</InputAdornment> },
+                  htmlInput: { min: 0, max: LIMITS.priceMax, step: 50, inputMode: 'decimal' },
+                }}
               />
             </Stack>
             <FormControlLabel

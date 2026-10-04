@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { accountLoginLimiter } from '../middleware/loginLimiter.js';
 import { adminLogin, adminLogout, adminMe, adminResend, adminVerify } from '../controllers/adminAuthController.js';
 import { listAuditLogs } from '../controllers/auditController.js';
 import { protect, requireAdmin } from '../middleware/auth.js';
@@ -21,7 +22,7 @@ const limiter = (limit, message, skipSuccessfulRequests = false) =>
 const loginLimiter = limiter(5, 'Too many sign-in attempts. Please try again in 15 minutes.', true);
 const codeLimiter = limiter(10, 'Too many attempts. Please try again in 15 minutes.');
 
-router.post('/auth/login', loginLimiter, adminLoginRules, adminLogin);
+router.post('/auth/login', loginLimiter, accountLoginLimiter, adminLoginRules, adminLogin);
 router.post('/auth/verify', codeLimiter, adminVerifyRules, adminVerify);
 router.post('/auth/resend', codeLimiter, adminResendRules, adminResend);
 

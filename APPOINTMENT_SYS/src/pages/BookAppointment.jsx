@@ -20,6 +20,7 @@ import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import EventBusyRoundedIcon from '@mui/icons-material/EventBusyRounded';
 import api from '../api/axios';
+import { fetchAll } from '../api/fetchAll';
 import BookingSummary from '../components/booking/BookingSummary';
 import DateStrip from '../components/booking/DateStrip';
 import StaffCard from '../components/booking/StaffCard';
@@ -34,7 +35,7 @@ import { addDays, parseDate, todayString } from '../utils/format';
 
 const STEPS = ['Service', 'Specialist', 'Date & time', 'Confirm'];
 const DAYS_AHEAD = 60; // matches the server's booking limit
-const NOTES_MAX = 500;
+const NOTES_MAX = 250;
 
 // Booking wizard. With an :id in the URL it reschedules that appointment instead.
 export default function BookAppointment() {
@@ -65,41 +66,54 @@ export default function BookAppointment() {
 
   // ----- Data loading -----
   useEffect(() => {
-    api
-      .get('/services', { params: { limit: 50 } })
-      .then(({ data }) => setServices(data.items))
-      .catch((err) => setLoadError(getErrorMessage(err)));
+    let active = true;
+    fetchAll('/services')
+      .then((items) => active && setServices(items))
+      .catch((err) => active && setLoadError(getErrorMessage(err)));
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (!rescheduleId) return;
+    if (!rescheduleId) return undefined;
+    let active = true;
     api
       .get(`/appointments/${rescheduleId}`)
       .then(({ data }) => {
+        if (!active) return;
         const appt = data.appointment;
         setOriginal(appt);
-        setServiceId(appt.service?._id ?? '');
+        setNotes(appt.notes ?? '');
+        // The service was removed: start from choosing a service instead.
+        if (!appt.service) {
+          setError('The service for this appointment is no longer offered. Please choose another service.');
+          setStep(0);
+          return;
+        }
+        setServiceId(appt.service._id);
         setStaffId(appt.staff?._id ?? '');
         setDate(appt.date >= todayString() ? appt.date : '');
-        setNotes(appt.notes ?? '');
-        setStep(2);
+        setStep(appt.staff ? 2 : 1);
       })
-      .catch((err) => setLoadError(getErrorMessage(err)));
+      .catch((err) => active && setLoadError(getErrorMessage(err)));
+    return () => {
+      active = false;
+    };
   }, [rescheduleId]);
 
   useEffect(() => {
     if (!serviceId) return undefined;
     let active = true;
-    api
-      .get('/staff', { params: { service: serviceId, limit: 50 } })
-      .then(({ data }) => active && setStaffData({ key: serviceId, items: data.items }))
+    fetchAll('/staff', { service: serviceId })
+      .then((items) => active && setStaffData({ key: serviceId, items }))
       .catch(() => active && setStaffData({ key: serviceId, items: [] }));
     return () => {
       active = false;
     };
   }, [serviceId]);
 
-  const slotsKey = serviceId && staffId && date ? `${serviceId}|${staffId}|${date}|${slotsRefresh}` : null;
+  const slotsKey = serviceId && staffId && date ? `${serviceId}|${staffId}|${date}|${rescheduleId ?? ''}|${slotsRefresh}` : null;
   useEffect(() => {
     if (!slotsKey) return undefined;
     let active = true;

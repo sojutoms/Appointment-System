@@ -38,3 +38,6 @@ export function startCooldown(purpose, email, seconds) {
   write(cooldownKey(purpose, email), String(until));
   return until;
 }
+
+// The code was used (or its session expired): don't offer to "reuse" it.
+export const clearCooldown = (purpose, email) => write(cooldownKey(purpose, email), null);

@@ -56,7 +56,11 @@ export default function Home() {
               See real-time availability, choose a time that suits you, and manage every booking in one place.
             </Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-              {user ? (
+              {user?.role === 'staff' ? (
+                <Button component={RouterLink} to="/staff" variant="contained" size="large">
+                  Open my schedule
+                </Button>
+              ) : user ? (
                 <Button component={RouterLink} to="/book" variant="contained" size="large">
                   Book an appointment
                 </Button>

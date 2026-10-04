@@ -5,7 +5,7 @@ import { isAdminRequest } from '../middleware/auth.js';
 import ApiError from '../utils/ApiError.js';
 import { audit } from '../utils/audit.js';
 import { getPagination, paginated } from '../utils/query.js';
-import { addDays, nowInBusinessTz, overlaps, toMinutes } from '../utils/time.js';
+import { addDays, isInPast, nowInBusinessTz, overlaps, toMinutes } from '../utils/time.js';
 
 export const TIME_OFF_MAX_DAYS_AHEAD = 180;
 
@@ -51,6 +51,7 @@ export async function createTimeOff(req, res) {
 
   const today = nowInBusinessTz().date;
   if (date < today) throw new ApiError(400, 'Time off cannot be in the past.');
+  if (!allDay && isInPast(date, endTime)) throw new ApiError(400, 'That time has already passed today. Choose a later time.');
   if (date > addDays(today, TIME_OFF_MAX_DAYS_AHEAD)) {
     throw new ApiError(400, `Time off can be added up to ${TIME_OFF_MAX_DAYS_AHEAD} days ahead.`);
   }

@@ -7,7 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { formatDate, formatDuration, formatPrice, formatTimeRange } from '../utils/format';
+import { formatDate, formatDuration, formatPhone, formatPrice, formatTimeRange } from '../utils/format';
 import { isActive } from '../utils/appointments';
 import StatusChip from './StatusChip';
 
@@ -60,7 +60,7 @@ export default function AppointmentDetailsDialog({ appointment, showClient, onCl
                   {appt.user.name}
                   <Typography variant="body2" color="text.secondary">
                     {appt.user.email}
-                    {appt.user.phone ? ` · ${appt.user.phone}` : ''}
+                    {appt.user.phone ? ` · ${formatPhone(appt.user.phone)}` : ''}
                   </Typography>
                 </Field>
               )}

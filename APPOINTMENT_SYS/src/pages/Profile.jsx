@@ -14,14 +14,22 @@ import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
 import api from '../api/axios';
 import ChangeEmailDialog from '../components/ChangeEmailDialog';
 import PasswordField from '../components/PasswordField';
+import PhoneField from '../components/PhoneField';
 import SubmitButton from '../components/SubmitButton';
 import useAuth from '../hooks/useAuth';
 import useToast from '../hooks/useToast';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
 import { initials } from '../utils/format';
-import { validatePassword } from '../utils/validation';
-
-const PHONE = /^[0-9+\-\s()]{7,20}$/;
+import {
+  cleanNameInput,
+  LIMITS,
+  splitName,
+  splitPhone,
+  toE164,
+  validatePassword,
+  validatePersonName,
+  validatePhone,
+} from '../utils/validation';
 
 function Section({ title, description, children }) {
   return (
@@ -43,31 +51,47 @@ function Section({ title, description, children }) {
   );
 }
 
+function initialPersonalInfo(user) {
+  const { country, number } = splitPhone(user.phone, user.phoneCountry);
+  return { ...splitName(user), phoneCountry: country, phone: number };
+}
+
 function PersonalInfoForm() {
   const { user, updateUser } = useAuth();
   const showToast = useToast();
-  const [form, setForm] = useState({ name: user.name, phone: user.phone || '' });
+  const [initial, setInitial] = useState(() => initialPersonalInfo(user));
+  const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
 
-  const dirty = form.name.trim() !== user.name || form.phone.trim() !== (user.phone || '');
+  const dirty = Object.keys(initial).some((key) => form[key].trim() !== initial[key]);
 
   const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setForm((prev) => ({ ...prev, [e.target.name]: cleanNameInput(e.target.value) }));
     setErrors((prev) => ({ ...prev, [e.target.name]: '' }));
   };
 
   const submit = async (e) => {
     e.preventDefault();
     const nextErrors = {};
-    if (!form.name.trim()) nextErrors.name = 'Name is required.';
-    if (form.phone.trim() && !PHONE.test(form.phone.trim())) nextErrors.phone = 'Please enter a valid phone number.';
+    const firstNameError = validatePersonName(form.firstName, 'First name');
+    if (firstNameError) nextErrors.firstName = firstNameError;
+    const lastNameError = validatePersonName(form.lastName, 'Last name');
+    if (lastNameError) nextErrors.lastName = lastNameError;
+    const phoneError = validatePhone(form.phone, form.phoneCountry);
+    if (phoneError) nextErrors.phone = phoneError;
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
     setBusy(true);
     try {
-      const { data } = await api.put('/users/me', { name: form.name.trim(), phone: form.phone.trim() });
+      const { data } = await api.put('/users/me', {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        phone: toE164(form.phone, form.phoneCountry),
+        ...(form.phone && { phoneCountry: form.phoneCountry }),
+      });
+      setInitial(initialPersonalInfo(data.user));
       updateUser(data.user);
       showToast('Profile updated.');
     } catch (err) {
@@ -81,16 +105,36 @@ function PersonalInfoForm() {
   return (
     <Box component="form" noValidate onSubmit={submit}>
       <Stack spacing={2.5}>
-        <TextField label="Full name" name="name" autoComplete="name" value={form.name} onChange={handleChange} error={Boolean(errors.name)} helperText={errors.name} />
-        <TextField
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2.5}>
+          <TextField
+            label="First name"
+            name="firstName"
+            autoComplete="given-name"
+            value={form.firstName}
+            onChange={handleChange}
+            error={Boolean(errors.firstName)}
+            helperText={errors.firstName}
+            slotProps={{ htmlInput: { maxLength: LIMITS.name } }}
+          />
+          <TextField
+            label="Last name"
+            name="lastName"
+            autoComplete="family-name"
+            value={form.lastName}
+            onChange={handleChange}
+            error={Boolean(errors.lastName)}
+            helperText={errors.lastName}
+            slotProps={{ htmlInput: { maxLength: LIMITS.name } }}
+          />
+        </Stack>
+        <PhoneField
           label="Phone (optional)"
-          name="phone"
-          type="tel"
-          autoComplete="tel"
-          value={form.phone}
-          onChange={handleChange}
-          error={Boolean(errors.phone)}
-          helperText={errors.phone}
+          value={{ country: form.phoneCountry, number: form.phone }}
+          onChange={({ country, number }) => {
+            setForm((prev) => ({ ...prev, phoneCountry: country, phone: number }));
+            setErrors((prev) => ({ ...prev, phone: '' }));
+          }}
+          error={errors.phone}
         />
         <Box>
           <SubmitButton busy={busy} busyText="Saving..." disabled={!dirty} fullWidth={false} size="medium">
@@ -156,7 +200,7 @@ function PasswordForm() {
           value={form.newPassword}
           onChange={handleChange}
           error={errors.newPassword}
-          helperText="At least 8 characters, with a letter and a number"
+          helperText="8 to 32 characters, with a letter and a number"
         />
         <PasswordField
           label="Confirm new password"
@@ -181,6 +225,9 @@ export default function Profile() {
   const showToast = useToast();
   const [emailDialog, setEmailDialog] = useState(false);
   const isStaff = user.role === 'staff';
+  // Admin accounts are protected by 2FA, so their email and password are only
+  // changed from the admin panel (the server refuses it here).
+  const isAdmin = user.role === 'admin';
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
@@ -225,10 +272,14 @@ export default function Profile() {
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontWeight: 600, wordBreak: 'break-all' }}>{user.email}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {isStaff ? 'Your work email is managed by an administrator.' : 'Changing it requires a code sent to the new address.'}
+                {isStaff
+                  ? 'Your work email is managed by an administrator.'
+                  : isAdmin
+                    ? 'Administrators change their email in the admin panel (My account).'
+                    : 'Changing it requires a code sent to the new address.'}
               </Typography>
             </Box>
-            {!isStaff && (
+            {!isStaff && !isAdmin && (
               <Button variant="outlined" onClick={() => setEmailDialog(true)} sx={{ flex: 'none' }}>
                 Change email
               </Button>
@@ -237,7 +288,11 @@ export default function Profile() {
         </Section>
 
         <Section title="Password" description="Changing your password logs you out on all other devices.">
-          <PasswordForm />
+          {isAdmin ? (
+            <Typography color="text.secondary">For security, administrators change their password in the admin panel (My account).</Typography>
+          ) : (
+            <PasswordForm />
+          )}
         </Section>
       </Stack>
 

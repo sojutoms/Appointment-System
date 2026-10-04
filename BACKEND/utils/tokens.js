@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env.js';
 
@@ -21,8 +22,10 @@ export const scopeForRole = (role) => (role === 'staff' ? SCOPES.STAFF : SCOPES.
 
 // `v` (tokenVersion) lets the server revoke every token for a user at once.
 export function signToken(user, scope = SCOPES.USER) {
+  // jti: a unique id per token, so a single admin session can be revoked on sign-out.
   return jwt.sign({ id: user._id, role: user.role, v: user.tokenVersion ?? 0, scope }, config.jwtSecret, {
     expiresIn: EXPIRY[scope](),
+    jwtid: crypto.randomUUID(),
   });
 }
 

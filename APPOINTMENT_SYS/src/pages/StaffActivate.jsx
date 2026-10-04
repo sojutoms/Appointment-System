@@ -11,6 +11,7 @@ import api from '../api/axios';
 import IconBadge from '../components/IconBadge';
 import OtpInput from '../components/OtpInput';
 import PasswordField from '../components/PasswordField';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 import ResendCode from '../components/ResendCode';
 import SubmitButton from '../components/SubmitButton';
 import useAuth from '../hooks/useAuth';
@@ -65,7 +66,8 @@ export default function StaffActivate() {
       }
       setErrors(getFieldErrors(err));
       setError(getErrorMessage(err));
-      setCode('');
+      // Only clear the code when the code itself was the problem (not e.g. the password).
+      if (/^(OTP_|INVITE_)/.test(err.response?.data?.code ?? '')) setCode('');
       setBusy(false);
     }
   };
@@ -115,6 +117,7 @@ export default function StaffActivate() {
           <TextField
             label="Work email"
             type="email"
+            slotProps={{ htmlInput: { maxLength: 64 } }}
             autoComplete="username"
             autoFocus
             value={form.email}
@@ -128,14 +131,17 @@ export default function StaffActivate() {
             </Typography>
             <OtpInput value={code} onChange={setCode} disabled={busy} invalid={Boolean(errors.code)} autoFocus={false} />
           </Box>
-          <PasswordField
-            label="New password"
-            autoComplete="new-password"
-            value={form.password}
-            onChange={(e) => set('password', e.target.value)}
-            error={errors.password}
-            helperText="At least 8 characters, with a letter and a number"
-          />
+          <Box>
+            <PasswordField
+              label="New password"
+              autoComplete="new-password"
+              value={form.password}
+              onChange={(e) => set('password', e.target.value)}
+              error={errors.password}
+              helperText="8 to 32 characters, with a letter and a number"
+            />
+            <PasswordStrengthMeter password={form.password} />
+          </Box>
           <PasswordField
             label="Confirm password"
             autoComplete="new-password"

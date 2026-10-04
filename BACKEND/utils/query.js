@@ -23,7 +23,7 @@ export function paginated(items, total, { page, limit }) {
 // Escapes user input so it is matched literally inside a RegExp
 // (prevents ReDoS and regex injection through the search box).
 export function searchRegex(text) {
-  const trimmed = String(text ?? '').trim().slice(0, 100);
+  const trimmed = String(text ?? '').trim().slice(0, 50);
   if (!trimmed) return null;
   return new RegExp(trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 }

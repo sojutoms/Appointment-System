@@ -12,7 +12,7 @@ const timeOffSchema = new mongoose.Schema(
     // For all-day entries these cover the whole day.
     startTime: { type: String, match: TIME, default: '00:00' },
     endTime: { type: String, match: /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/, default: '24:00' },
-    reason: { type: String, trim: true, maxlength: 200, default: '' },
+    reason: { type: String, trim: true, maxlength: 100, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }

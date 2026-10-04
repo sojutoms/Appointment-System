@@ -33,7 +33,8 @@ export async function listServices(req, res) {
 // GET /api/services/:id
 export async function getService(req, res) {
   const service = await Service.findById(req.params.id);
-  if (!service) throw new ApiError(404, 'Service not found.');
+  // Inactive services are hidden from everyone but the admin panel.
+  if (!service || (!service.isActive && !isAdminRequest(req))) throw new ApiError(404, 'Service not found.');
   res.json({ service });
 }
 

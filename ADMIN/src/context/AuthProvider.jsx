@@ -30,9 +30,17 @@ export default function AuthProvider({ children }) {
     api
       .get('/admin/auth/me')
       .then(({ data }) => setUser(data.user))
-      .catch(() => tokenStore.clear())
+      .catch((err) => {
+        // Only a rejected token ends the session (a 401 is already handled by the
+        // axios interceptor). A server or network error keeps the token, so a
+        // blip doesn't sign the admin out; the login screen explains what happened.
+        const status = err.response?.status;
+        if (status === 401) return;
+        if (status === 403) endSession('Your session has ended. Please sign in again.');
+        else setSignOutReason("We couldn't reach the server to restore your session. Check your connection and sign in again.");
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [endSession]);
 
   // The API rejected our token (expired, revoked, rights removed).
   useEffect(() => {

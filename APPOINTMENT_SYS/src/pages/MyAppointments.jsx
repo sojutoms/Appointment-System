@@ -36,6 +36,8 @@ import useToast from '../hooks/useToast';
 import { STATUS_META } from '../utils/appointments';
 import { getErrorMessage } from '../utils/errors';
 import { formatDate, formatTimeRange } from '../utils/format';
+import { clickable } from '../utils/a11y';
+import { LIMITS } from '../utils/validation';
 
 const PAGE_SIZE = 8;
 const SCOPES = [
@@ -53,9 +55,17 @@ export default function MyAppointments() {
   const [params, setParams] = useSearchParams();
   const scope = SCOPES.some((s) => s.value === params.get('scope')) ? params.get('scope') : 'upcoming';
   const status = STATUS_META[params.get('status')] ? params.get('status') : '';
-  const page = Math.max(1, Number(params.get('page')) || 1);
-  const [search, setSearch] = useState(params.get('q') || '');
+  const page = Math.min(10000, Math.max(1, Math.floor(Number(params.get('page'))) || 1));
+  const urlQuery = (params.get('q') || '').slice(0, LIMITS.search);
+  const [search, setSearch] = useState(urlQuery);
   const debouncedSearch = useDebounce(search.trim());
+
+  // The URL's search changed from outside (nav link, back/forward): show it in the box.
+  const [seenUrlQuery, setSeenUrlQuery] = useState(urlQuery);
+  if (urlQuery !== seenUrlQuery) {
+    setSeenUrlQuery(urlQuery);
+    if (urlQuery !== search.trim()) setSearch(urlQuery);
+  }
 
   const updateParams = (changes) => {
     const next = new URLSearchParams(params);
@@ -64,22 +74,24 @@ export default function MyAppointments() {
     setParams(next, { replace: true });
   };
 
-  // Push the debounced search text into the URL.
+  // Push the debounced search text into the URL, only when the user typed
+  // (not when the URL changed), so navigating can clear an old search.
   useEffect(() => {
-    if ((params.get('q') || '') === debouncedSearch) return;
+    if (urlQuery === debouncedSearch) return;
     const next = new URLSearchParams(params);
     if (debouncedSearch) next.set('q', debouncedSearch);
     else next.delete('q');
     next.delete('page');
     setParams(next, { replace: true });
-  }, [debouncedSearch, params, setParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   // ----- Data -----
   const [refresh, setRefresh] = useState(0);
   const query = {
     ...(scope !== 'all' && { scope }),
     ...(status && { status }),
-    ...(params.get('q') && { search: params.get('q') }),
+    ...(urlQuery && { search: urlQuery }),
     page,
     limit: PAGE_SIZE,
   };
@@ -97,6 +109,13 @@ export default function MyAppointments() {
       active = false;
     };
   }, [key]);
+
+  // Past the last page (old link, or its last item removed): go to the last page.
+  const lastPage = data.pagination?.total > 0 ? data.pagination.totalPages : null;
+  useEffect(() => {
+    if (!loading && lastPage && page > lastPage) updateParams({ page: String(lastPage) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, lastPage, page]);
 
   // ----- Actions -----
   const [details, setDetails] = useState(null);
@@ -173,7 +192,7 @@ export default function MyAppointments() {
                   </InputAdornment>
                 ),
               },
-              htmlInput: { 'aria-label': 'Search appointments', maxLength: 100 },
+              htmlInput: { 'aria-label': 'Search appointments', maxLength: LIMITS.search },
             }}
           />
           <TextField
@@ -252,7 +271,7 @@ export default function MyAppointments() {
               </TableHead>
               <TableBody>
                 {items.map((appt) => (
-                  <TableRow key={appt._id} hover onClick={() => setDetails(appt)} sx={{ cursor: 'pointer' }}>
+                  <TableRow key={appt._id} hover {...clickable(() => setDetails(appt))} aria-label={`View appointment on ${formatDate(appt.date)}`} sx={{ cursor: 'pointer' }}>
                     <TableCell>
                       <Typography sx={{ fontWeight: 600 }}>{formatDate(appt.date)}</Typography>
                       <Typography variant="body2" color="text.secondary">
@@ -280,7 +299,8 @@ export default function MyAppointments() {
             {items.map((appt) => (
               <Box
                 key={appt._id}
-                onClick={() => setDetails(appt)}
+                {...clickable(() => setDetails(appt))}
+                aria-label={`View appointment on ${formatDate(appt.date)}`}
                 sx={{ p: 2, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
               >
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
