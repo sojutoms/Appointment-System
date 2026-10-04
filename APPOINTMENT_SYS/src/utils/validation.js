@@ -67,9 +67,19 @@ export function validatePassword(password) {
 
 // `number` is the national number typed by the user (digits only); the country
 // code comes from the selected country. Empty is allowed (phone is optional).
+const PH_MOBILE = /^9\d{9}$/; // 10 digits starting with 9 (after the +63 shown in the field)
+
 export function validatePhone(number, country) {
   if (!number) return '';
   if (!country) return 'Please choose a country.';
+
+  if (country === 'PH') {
+    if (!PH_MOBILE.test(number)) {
+      return 'Enter 10 digits starting with 9 (e.g. 9171234567).';
+    }
+    return '';
+  }
+
   const parsed = parsePhoneNumberFromString(number, country);
   if (!parsed?.isValid()) return 'Please enter a valid phone number for the selected country.';
   return '';

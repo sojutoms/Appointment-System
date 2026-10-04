@@ -121,7 +121,7 @@ export default function Register() {
             label="Email"
             type="email"
             name="email"
-            placeholder="you@example.com"
+            placeholder="user@example.com"
             autoComplete="email"
             value={form.email}
             onChange={handleChange}

@@ -101,7 +101,7 @@ export default function Login() {
             type="email"
             slotProps={{ htmlInput: { maxLength: 64 } }}
             name="email"
-            placeholder="you@example.com"
+            placeholder="user@example.com"
             autoComplete="email"
             autoFocus
             value={form.email}
