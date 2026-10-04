@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography';
 import BeachAccessOutlinedIcon from '@mui/icons-material/BeachAccessOutlined';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import api from '../../api/axios';
+import { fetchAll } from '../../api/fetchAll';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import EmptyState from '../../components/EmptyState';
 import useToast from '../../hooks/useToast';
@@ -38,11 +39,21 @@ export default function StaffTimeOff() {
   const [removeBusy, setRemoveBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
+  // The list has its own error, so a failed form submit doesn't affect it (and vice versa).
+  const [listError, setListError] = useState('');
+
   useEffect(() => {
-    api
-      .get('/time-off', { params: { limit: 50 } })
-      .then(({ data }) => setEntries(data.items))
-      .catch((err) => setError(getErrorMessage(err)));
+    let active = true;
+    fetchAll('/time-off')
+      .then((items) => {
+        if (!active) return;
+        setEntries(items);
+        setListError('');
+      })
+      .catch((err) => active && setListError(getErrorMessage(err)));
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -50,8 +61,13 @@ export default function StaffTimeOff() {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    const today = todayString();
     if (!form.date) {
       setError('Choose a date.');
+      return;
+    }
+    if (form.date < today || form.date > addDays(today, 180)) {
+      setError('Choose a date between today and 180 days from now.');
       return;
     }
     if (!form.allDay && form.startTime >= form.endTime) {
@@ -132,7 +148,7 @@ export default function StaffTimeOff() {
                     placeholder="e.g. Vacation, training"
                     value={form.reason}
                     onChange={(e) => set('reason', e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 200 } }}
+                    slotProps={{ htmlInput: { maxLength: 100 } }}
                   />
                   <Alert severity="info">If clients are already booked in this period, ask an administrator to move those appointments first.</Alert>
                   <Box>
@@ -154,7 +170,12 @@ export default function StaffTimeOff() {
               </Typography>
             </Box>
             <Divider />
-            {entries === null && !error && <Skeleton variant="rounded" height={120} sx={{ m: 2 }} />}
+            {listError && (
+              <Alert severity="error" sx={{ m: 2 }}>
+                {listError}
+              </Alert>
+            )}
+            {entries === null && !listError && <Skeleton variant="rounded" height={120} sx={{ m: 2 }} />}
             {entries?.length === 0 && <EmptyState icon={BeachAccessOutlinedIcon} title="No time off scheduled" description="Anything you add appears here." />}
             {entries?.map((t, i) => (
               <Box key={t._id}>

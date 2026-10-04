@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom';
 import AuthProvider from './context/AuthProvider';
 import ToastProvider from './context/ToastProvider';
 import GuestRoute from './components/GuestRoute';
@@ -23,6 +23,12 @@ const StaffActivate = lazy(() => import('./pages/StaffActivate'));
 const StaffSchedule = lazy(() => import('./pages/staff/StaffSchedule'));
 const StaffTimeOff = lazy(() => import('./pages/staff/StaffTimeOff'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+
+// A different appointment id must start a fresh booking wizard.
+function RescheduleRoute() {
+  const { id } = useParams();
+  return <BookAppointment key={id} />;
+}
 
 export default function App() {
   return (
@@ -48,9 +54,10 @@ export default function App() {
                 {/* Clients (booking side) */}
                 <Route element={<ProtectedRoute roles={CLIENT_ROLES} />}>
                   <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/book" element={<BookAppointment />} />
+                  <Route path="/book" element={<BookAppointment key="new" />} />
                   <Route path="/appointments" element={<MyAppointments />} />
-                  <Route path="/appointments/:id/reschedule" element={<BookAppointment />} />
+                  {/* Keyed per route so state never carries over between booking and rescheduling. */}
+                  <Route path="/appointments/:id/reschedule" element={<RescheduleRoute />} />
                 </Route>
 
                 {/* Staff portal */}

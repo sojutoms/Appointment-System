@@ -1,3 +1,4 @@
+import RevokedToken from '../models/RevokedToken.js';
 import { config } from '../config/env.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
@@ -104,6 +105,11 @@ export function adminMe(req, res) {
 
 // POST /api/admin/auth/logout - recorded for the audit trail (the token is discarded client-side).
 export async function adminLogout(req, res) {
+  // Revoke this exact token so it can't be reused (e.g. if it was copied) until it expires.
+  const { jti, exp } = req.tokenPayload ?? {};
+  if (jti && exp) {
+    await RevokedToken.updateOne({ jti }, { jti, expiresAt: new Date(exp * 1000) }, { upsert: true });
+  }
   await audit(req, 'auth.admin_logout', { targetType: 'auth', targetId: req.user._id, summary: 'Admin signed out' });
   res.json({ message: 'Signed out.' });
 }

@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from './config/env.js';
-import sanitizeBody from './middleware/sanitize.js';
+import sanitizeInput from './middleware/sanitize.js';
 import ApiError from './utils/ApiError.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import adminRoutes from './routes/adminRoutes.js';
@@ -37,7 +37,7 @@ app.use(
   })
 );
 app.use(express.json({ limit: '10kb' }));
-app.use(sanitizeBody);
+app.use(sanitizeInput);
 if (config.nodeEnv !== 'test') app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 
 // API responses contain personal data: never let browsers or proxies cache them.

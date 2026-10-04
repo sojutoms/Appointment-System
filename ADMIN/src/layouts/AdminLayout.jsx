@@ -87,8 +87,9 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleIdle = useCallback(() => {
-    logout(`You were signed out after ${IDLE_MINUTES} minutes of inactivity.`);
+  const handleIdle = useCallback(async () => {
+    // Wait for the sign-out so the login page doesn't still see a user and bounce back.
+    await logout(`You were signed out after ${IDLE_MINUTES} minutes of inactivity.`);
     navigate('/login', { replace: true });
   }, [logout, navigate]);
   const { warning, secondsLeft, stayActive } = useIdleTimeout({ timeoutMs: IDLE_MINUTES * 60_000, onTimeout: handleIdle });

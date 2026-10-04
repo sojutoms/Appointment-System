@@ -22,7 +22,7 @@ import PageHeader from '../components/PageHeader';
 import SearchField from '../components/SearchField';
 import TablePager from '../components/TablePager';
 import useApiList from '../hooks/useApiList';
-import useUrlFilters from '../hooks/useUrlFilters';
+import useUrlFilters, { FILTER } from '../hooks/useUrlFilters';
 
 const CATEGORIES = [
   { value: '', label: 'All events' },
@@ -69,7 +69,10 @@ const COLORS = { auth: 'info', appointment: 'primary', service: 'secondary', sta
 
 // Read-only view of the append-only audit trail.
 export default function AuditLog() {
-  const [filters, setFilters] = useUrlFilters({ q: '', action: '', success: '' });
+  const [filters, setFilters] = useUrlFilters(
+    { q: '', action: '', success: '' },
+    { q: FILTER.search, action: CATEGORIES.map((c) => c.value), success: ['true', 'false'] }
+  );
   const { items, pagination, loading, error } = useApiList('/admin/audit-logs', {
     search: filters.q,
     action: filters.action,

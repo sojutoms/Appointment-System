@@ -99,7 +99,7 @@ export default function Dashboard() {
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {cards.map((card) => (
           <Grid key={card.label} size={{ xs: 6, lg: 3 }}>
-            <StatCard {...card} />
+            <StatCard {...card} value={error ? '—' : card.value} />
           </Grid>
         ))}
       </Grid>

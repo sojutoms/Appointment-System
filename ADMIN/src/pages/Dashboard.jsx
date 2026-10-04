@@ -23,6 +23,7 @@ import MedicalServicesOutlinedIcon from '@mui/icons-material/MedicalServicesOutl
 import TaskAltRoundedIcon from '@mui/icons-material/TaskAltRounded';
 import EventAvailableRoundedIcon from '@mui/icons-material/EventAvailableRounded';
 import api from '../api/axios';
+import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import IconBadge from '../components/IconBadge';
 import PageHeader from '../components/PageHeader';
@@ -31,7 +32,7 @@ import WeekChart from '../components/WeekChart';
 import useAuth from '../hooks/useAuth';
 import useToast from '../hooks/useToast';
 import { getErrorMessage } from '../utils/errors';
-import { formatTimeRange, relativeDay, todayString } from '../utils/format';
+import { formatDate, formatTimeRange, relativeDay, todayString } from '../utils/format';
 
 function StatCard({ icon, label, value, color }) {
   return (
@@ -80,8 +81,11 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [busyId, setBusyId] = useState('');
+  // Cancelling frees the slot, so it is confirmed first (as on the Appointments page).
+  const [cancelling, setCancelling] = useState(null);
 
   useEffect(() => {
+    let active = true;
     const date = todayString();
     Promise.all([
       api.get('/appointments/stats'),
@@ -89,11 +93,17 @@ export default function Dashboard() {
       api.get('/appointments', { params: { date, status: 'active', sort: 'asc', limit: 20 } }),
     ])
       .then(([s, p, t]) => {
+        if (!active) return;
         setStats(s.data);
         setPending(p.data);
         setToday(t.data.items);
+        // A later successful refresh clears an earlier error.
+        setError('');
       })
-      .catch((err) => setError(getErrorMessage(err)));
+      .catch((err) => active && setError(getErrorMessage(err)));
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   const setStatus = async (appt, status) => {
@@ -133,7 +143,7 @@ export default function Dashboard() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {cards.map((card) => (
           <Grid key={card.label} size={{ xs: 6, lg: 3 }}>
-            <StatCard {...card} />
+            <StatCard {...card} value={error && card.value === undefined ? '—' : card.value} />
           </Grid>
         ))}
       </Grid>
@@ -145,7 +155,13 @@ export default function Dashboard() {
               <Typography variant="h6" component="h2" sx={{ mb: 2 }}>
                 Next 7 days
               </Typography>
-              {stats?.nextSevenDays ? <WeekChart days={stats.nextSevenDays} /> : <Skeleton variant="rounded" height={210} />}
+              {stats?.nextSevenDays ? (
+                <WeekChart days={stats.nextSevenDays} />
+              ) : error ? (
+                <Typography color="text.secondary">Couldn&apos;t load the chart.</Typography>
+              ) : (
+                <Skeleton variant="rounded" height={210} />
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -179,7 +195,7 @@ export default function Dashboard() {
                       </Tooltip>
                       <Tooltip title="Cancel">
                         <span>
-                          <IconButton color="error" onClick={() => setStatus(appt, 'cancelled')} disabled={busyId === appt._id} aria-label="Cancel">
+                          <IconButton color="error" onClick={() => setCancelling(appt)} disabled={busyId === appt._id} aria-label="Cancel">
                             <CloseRoundedIcon />
                           </IconButton>
                         </span>
@@ -214,6 +230,23 @@ export default function Dashboard() {
           </Card>
         </Grid>
       </Grid>
+
+      <ConfirmDialog
+        open={Boolean(cancelling)}
+        title="Cancel this appointment?"
+        message={
+          cancelling
+            ? `${cancelling.user?.name ?? 'This client'}'s booking on ${formatDate(cancelling.date)} at ${formatTimeRange(cancelling.startTime, cancelling.endTime)} will be cancelled and the time slot freed.`
+            : ''
+        }
+        confirmText="Cancel appointment"
+        busy={Boolean(cancelling) && busyId === cancelling._id}
+        onConfirm={async () => {
+          await setStatus(cancelling, 'cancelled');
+          setCancelling(null);
+        }}
+        onClose={() => setCancelling(null)}
+      />
     </>
   );
 }

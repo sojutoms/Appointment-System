@@ -36,9 +36,9 @@ import TablePager from '../components/TablePager';
 import useApiList from '../hooks/useApiList';
 import useAuth from '../hooks/useAuth';
 import useToast from '../hooks/useToast';
-import useUrlFilters from '../hooks/useUrlFilters';
+import useUrlFilters, { FILTER } from '../hooks/useUrlFilters';
 import { getErrorMessage } from '../utils/errors';
-import { initials } from '../utils/format';
+import { formatPhone, initials } from '../utils/format';
 
 const ROLE_LABELS = { client: 'Client', staff: 'Staff', admin: 'Admin' };
 
@@ -47,7 +47,10 @@ const shortDate =(value) => (value ? new Date(value).toLocaleDateString('en-US',
 export default function Users() {
   const { user: me } = useAuth();
   const showToast = useToast();
-  const [filters, setFilters] = useUrlFilters({ q: '', role: '', verified: '' });
+  const [filters, setFilters] = useUrlFilters(
+    { q: '', role: '', verified: '' },
+    { q: FILTER.search, role: ['client', 'staff', 'admin'], verified: ['true', 'false'] }
+  );
   const { items, pagination, loading, error, reload } = useApiList('/users', {
     search: filters.q,
     role: filters.role,
@@ -199,7 +202,7 @@ export default function Users() {
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                               {u.email}
-                              {u.phone ? ` · ${u.phone}` : ''}
+                              {u.phone ? ` · ${formatPhone(u.phone)}` : ''}
                             </Typography>
                           </Box>
                         </Stack>

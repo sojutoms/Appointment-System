@@ -28,10 +28,12 @@ import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditCalendarRoundedIcon from '@mui/icons-material/EditCalendarRounded';
 import EventBusyRoundedIcon from '@mui/icons-material/EventBusyRounded';
+import ReplayRoundedIcon from '@mui/icons-material/ReplayRounded';
 import FilterAltOffOutlinedIcon from '@mui/icons-material/FilterAltOffOutlined';
 import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import TaskAltRoundedIcon from '@mui/icons-material/TaskAltRounded';
 import api from '../api/axios';
+import { fetchAll } from '../api/fetchAll';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
@@ -41,10 +43,10 @@ import StatusChip from '../components/StatusChip';
 import TablePager from '../components/TablePager';
 import useApiList from '../hooks/useApiList';
 import useToast from '../hooks/useToast';
-import useUrlFilters from '../hooks/useUrlFilters';
+import useUrlFilters, { FILTER } from '../hooks/useUrlFilters';
 import { STATUS_META, hasStarted, isActive } from '../utils/appointments';
 import { getErrorMessage } from '../utils/errors';
-import { formatDate, formatDuration, formatPrice, formatTimeRange } from '../utils/format';
+import { formatDate, formatDuration, formatPhone, formatPrice, formatTimeRange } from '../utils/format';
 
 const SCOPES = [
   { value: 'upcoming', label: 'Upcoming' },
@@ -56,6 +58,13 @@ const SCOPES = [
 const ACTIONS = {
   confirmed: { label: 'Confirm', icon: CheckRoundedIcon, color: 'success', title: 'Confirm this appointment?', message: 'The client will see it as confirmed.' },
   completed: { label: 'Mark completed', icon: TaskAltRoundedIcon, color: 'primary', title: 'Mark as completed?', message: 'Use this once the visit has taken place.' },
+  reopen: {
+    label: 'Reopen (not completed)',
+    icon: ReplayRoundedIcon,
+    color: 'warning',
+    title: 'Reopen this appointment?',
+    message: 'It goes back to confirmed. Use this if it was marked completed by mistake.',
+  },
   cancelled: { label: 'Cancel', icon: EventBusyRoundedIcon, color: 'error', title: 'Cancel this appointment?', message: 'The time slot will be released for other clients.' },
   delete: { label: 'Delete', icon: DeleteOutlineRoundedIcon, color: 'error', title: 'Delete this appointment?', message: 'It will be permanently removed. This cannot be undone.' },
 };
@@ -65,6 +74,7 @@ function availableActions(appt) {
   if (appt.status === 'pending') list.push('confirmed');
   if (isActive(appt) && hasStarted(appt)) list.push('completed');
   if (isActive(appt)) list.push('reschedule', 'cancelled');
+  if (appt.status === 'completed') list.push('reopen');
   list.push('delete');
   return list;
 }
@@ -82,22 +92,29 @@ function Detail({ label, children }) {
 
 export default function Appointments() {
   const showToast = useToast();
-  const [filters, setFilters] = useUrlFilters({ scope: 'upcoming', status: '', staff: '', from: '', to: '', q: '' });
+  const [filters, setFilters] = useUrlFilters(
+    { scope: 'upcoming', status: '', staff: '', from: '', to: '', q: '' },
+    { scope: SCOPES.map((s) => s.value), status: Object.keys(STATUS_META), staff: FILTER.id, from: FILTER.date, to: FILTER.date, q: FILTER.search }
+  );
   const [staffOptions, setStaffOptions] = useState([]);
 
   useEffect(() => {
-    api
-      .get('/staff', { params: { includeInactive: true, limit: 50 } })
-      .then(({ data }) => setStaffOptions(data.items))
+    fetchAll('/staff', { includeInactive: true })
+      .then(setStaffOptions)
       .catch(() => setStaffOptions([]));
   }, []);
+
+  // A typed "From" later than "To" (the pickers' min/max only guide the calendar)
+  // would match nothing, so the range is used in order and the To field says so.
+  const rangeReversed = Boolean(filters.from && filters.to && filters.from > filters.to);
+  const [rangeFrom, rangeTo] = rangeReversed ? [filters.to, filters.from] : [filters.from, filters.to];
 
   const { items, pagination, loading, error, reload } = useApiList('/appointments', {
     scope: filters.scope === 'all' ? '' : filters.scope,
     status: filters.status,
     staff: filters.staff,
-    from: filters.from,
-    to: filters.to,
+    from: rangeFrom,
+    to: rangeTo,
     search: filters.q,
     sort: filters.scope === 'past' ? 'desc' : 'asc',
     page: filters.page,
@@ -122,8 +139,9 @@ export default function Appointments() {
     setBusy(true);
     try {
       if (action === 'delete') await api.delete(`/appointments/${appt._id}`);
-      else await api.put(`/appointments/${appt._id}`, { status: action });
-      showToast(action === 'delete' ? 'Appointment deleted.' : `Appointment ${STATUS_META[action].label.toLowerCase()}.`);
+      else await api.put(`/appointments/${appt._id}`, { status: action === 'reopen' ? 'confirmed' : action });
+      const done = { delete: 'Appointment deleted.', reopen: 'Appointment reopened as confirmed.' };
+      showToast(done[action] ?? `Appointment ${STATUS_META[action].label.toLowerCase()}.`);
       setPendingAction(null);
       if (action === 'delete' && items.length === 1 && filters.page > 1) setFilters({ page: filters.page - 1 });
       reload();
@@ -194,6 +212,8 @@ export default function Appointments() {
             label="To"
             value={filters.to}
             onChange={(e) => setFilters({ to: e.target.value })}
+            error={rangeReversed}
+            helperText={rangeReversed ? 'Earlier than From: showing the range in order' : undefined}
             slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: filters.from || undefined } }}
           />
           <Button
@@ -320,7 +340,7 @@ export default function Appointments() {
                   {details.user?.name ?? 'Deleted user'}
                   <Typography variant="body2" color="text.secondary">
                     {details.user?.email}
-                    {details.user?.phone ? ` · ${details.user.phone}` : ''}
+                    {details.user?.phone ? ` · ${formatPhone(details.user.phone)}` : ''}
                   </Typography>
                 </Detail>
                 <Detail label="Service">

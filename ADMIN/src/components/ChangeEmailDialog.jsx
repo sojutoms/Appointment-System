@@ -11,16 +11,17 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import api from '../api/axios';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
-import { getCooldownUntil, startCooldown } from '../utils/otpSession';
 import { validateEmail } from '../utils/validation';
 import OtpInput from './OtpInput';
 import PasswordField from './PasswordField';
 import ResendCode from './ResendCode';
 import SubmitButton from './SubmitButton';
 
-const PURPOSE = 'change-email';
+// When the Resend button unlocks (epoch ms).
+const cooldownFrom = (seconds) => Date.now() + seconds * 1000;
 
-// Two steps: new email + current password -> code sent to the new email.
+// Admin email change. Two steps: new email + current password -> code sent to
+// the new email. Only allowed from an admin-panel session (the server checks).
 export default function ChangeEmailDialog({ open, currentEmail, onClose, onChanged }) {
   const [step, setStep] = useState(0);
   const [newEmail, setNewEmail] = useState('');
@@ -62,7 +63,7 @@ export default function ChangeEmailDialog({ open, currentEmail, onClose, onChang
     setError(getErrorMessage(err));
     setErrors(getFieldErrors(err));
     const retryAfter = err.response?.data?.retryAfter;
-    if (retryAfter) setCooldownUntil(startCooldown(PURPOSE, email, retryAfter));
+    if (retryAfter) setCooldownUntil(cooldownFrom(retryAfter));
   };
 
   const requestCode = async (e) => {
@@ -76,19 +77,10 @@ export default function ChangeEmailDialog({ open, currentEmail, onClose, onChang
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
-    // A code for this address was sent moments ago: reuse it.
-    const existing = getCooldownUntil(PURPOSE, email);
-    if (existing) {
-      setCooldownUntil(existing);
-      setNotice(`We already sent a code to ${email}.`);
-      setStep(1);
-      return;
-    }
-
     setBusy(true);
     try {
       const { data } = await api.post('/users/me/email', { newEmail: email, currentPassword: password });
-      setCooldownUntil(startCooldown(PURPOSE, email, data.resendAvailableIn));
+      setCooldownUntil(cooldownFrom(data.resendAvailableIn));
       setNotice(data.message);
       setStep(1);
     } catch (err) {
@@ -119,7 +111,7 @@ export default function ChangeEmailDialog({ open, currentEmail, onClose, onChang
     setError('');
     try {
       const { data } = await api.post('/users/me/email/resend', { newEmail: email });
-      setCooldownUntil(startCooldown(PURPOSE, email, data.resendAvailableIn));
+      setCooldownUntil(cooldownFrom(data.resendAvailableIn));
       setCode('');
       setNotice('A new code is on its way. Earlier codes no longer work.');
     } catch (err) {

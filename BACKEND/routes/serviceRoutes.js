@@ -7,12 +7,12 @@ import {
   updateService,
 } from '../controllers/serviceController.js';
 import { optionalAuth, protect, requireAdmin } from '../middleware/auth.js';
-import { createServiceRules, mongoIdParam, updateServiceRules } from '../validators/rules.js';
+import { createServiceRules, mongoIdParam, publicListRules, updateServiceRules } from '../validators/rules.js';
 
 const router = Router();
 
-router.get('/', optionalAuth, listServices);
-router.get('/:id', mongoIdParam, getService);
+router.get('/', optionalAuth, publicListRules, listServices);
+router.get('/:id', optionalAuth, mongoIdParam, getService);
 
 // Changes are admin-panel only.
 router.post('/', protect, requireAdmin, createServiceRules, createService);

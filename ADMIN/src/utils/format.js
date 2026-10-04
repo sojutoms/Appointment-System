@@ -1,5 +1,6 @@
 // Display helpers. Dates from the API are "YYYY-MM-DD" strings and times are
 // "HH:MM" (24-hour), both in the business's local time.
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -15,7 +16,27 @@ export function toDateString(date) {
   return `${y}-${m}-${d}`;
 }
 
-export const todayString = () => toDateString(new Date());
+// The clinic's time zone (keep in sync with the server's APP_TIMEZONE).
+// "Today" and "has it started" follow the clinic's clock, not the viewer's,
+// so someone browsing from another time zone sees the same rules the server applies.
+export const BUSINESS_TIMEZONE = import.meta.env.VITE_BUSINESS_TIMEZONE || 'Asia/Manila';
+const businessClock = new Intl.DateTimeFormat('en-CA', {
+  timeZone: BUSINESS_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+// { date: 'YYYY-MM-DD', minutes: minutes since midnight } in the clinic's time zone.
+export function nowInBusinessTz() {
+  const parts = Object.fromEntries(businessClock.formatToParts(new Date()).map((p) => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+}
+
+export const todayString = () => nowInBusinessTz().date;
 
 export function addDays(dateStr, days) {
   const date = parseDate(dateStr);
@@ -45,8 +66,13 @@ export function relativeDay(dateStr) {
   return formatDate(dateStr, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+// Whole prices without decimals (₱500); others with exactly two (₱99.90).
 const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 });
-export const formatPrice = (amount) => peso.format(amount ?? 0);
+const pesoCents = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function formatPrice(amount) {
+  const value = amount ?? 0;
+  return (Number.isInteger(value) ? peso : pesoCents).format(value);
+}
 
 export function formatDuration(minutes) {
   if (minutes < 60) return `${minutes} min`;
@@ -70,3 +96,9 @@ export const initials = (name = '') =>
     .slice(0, 2)
     .map((part) => part[0].toUpperCase())
     .join('');
+
+// "+639171234567" -> "+63 917 123 4567". Older free-form numbers are shown as typed.
+export function formatPhone(phone) {
+  if (!phone) return '';
+  return parsePhoneNumberFromString(phone)?.formatInternational() ?? phone;
+}

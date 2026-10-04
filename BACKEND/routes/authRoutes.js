@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
+import { accountLoginLimiter } from '../middleware/loginLimiter.js';
 import {
   activateStaff,
   forgotPassword,
@@ -53,7 +54,7 @@ const verifyLimiter = limiter(20, 'Too many attempts. Please try again in 15 min
 router.post('/register', emailLimiter, registerRules, register);
 router.post('/verify-email', verifyLimiter, verifyEmailRules, verifyEmail);
 router.post('/resend-otp', emailLimiter, resendOtpRules, resendOtp);
-router.post('/login', loginLimiter, loginRules, login);
+router.post('/login', loginLimiter, accountLoginLimiter, loginRules, login);
 
 router.post('/forgot-password', emailLimiter, forgotPasswordRules, forgotPassword);
 router.post('/verify-reset-otp', verifyLimiter, verifyResetOtpRules, verifyResetOtp);

@@ -1,7 +1,9 @@
+import RevokedToken from '../models/RevokedToken.js';
 import Staff from '../models/Staff.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
 import { audit } from '../utils/audit.js';
+import { confirmCurrentPassword } from '../utils/credentials.js';
 import { SCOPES, verifyToken } from '../utils/tokens.js';
 
 function readToken(req) {
@@ -19,6 +21,11 @@ async function sessionFromToken(token, allowedScopes = [SCOPES.USER, SCOPES.STAF
     throw new ApiError(401, 'Session expired or invalid. Please log in again.');
   }
 
+  // Admin sessions that were signed out stay dead even though the token hasn't expired.
+  if (scope === SCOPES.ADMIN && (!payload.jti || (await RevokedToken.exists({ jti: payload.jti })))) {
+    throw new ApiError(401, 'You have signed out. Please sign in again.');
+  }
+
   // Re-load the user so deleted accounts and role changes take effect immediately.
   const user = await User.findById(payload.id).select('+tokenVersion');
   if (!user) throw new ApiError(401, 'Account no longer exists.');
@@ -34,16 +41,17 @@ async function sessionFromToken(token, allowedScopes = [SCOPES.USER, SCOPES.STAF
   if ((scope === SCOPES.STAFF) !== (user.role === 'staff')) {
     throw new ApiError(401, 'Session expired or invalid. Please log in again.');
   }
-  return { user, scope };
+  return { user, scope, payload };
 }
 
 // Requires a valid session token; sets req.user and req.scope.
 export async function protect(req, _res, next) {
   const token = readToken(req);
   if (!token) throw new ApiError(401, 'Not authorized. Please log in.');
-  const { user, scope } = await sessionFromToken(token);
+  const { user, scope, payload } = await sessionFromToken(token);
   req.user = user;
   req.scope = scope;
+  req.tokenPayload = payload;
   next();
 }
 
@@ -82,6 +90,8 @@ export async function requireStaff(req, _res, next) {
   }
   const staff = await Staff.findOne({ user: req.user._id });
   if (!staff) throw new ApiError(401, 'Your staff access was removed. Please contact an administrator.');
+  // A deactivated staff member also loses the portal (it shows client contact details).
+  if (!staff.isActive) throw new ApiError(401, 'Your staff profile is inactive. Please contact an administrator.');
   req.staff = staff;
   next();
 }
@@ -105,8 +115,8 @@ export async function requirePasswordConfirmation(req, _res, next) {
   if (typeof password !== 'string' || !password) {
     throw new ApiError(400, 'Please confirm your password to continue.', undefined, { code: 'PASSWORD_CONFIRMATION_REQUIRED' });
   }
-  const self = await User.findById(req.user._id).select('+password');
-  if (!(await self.matchPassword(password))) {
+  // Wrong passwords count toward the account lockout (see confirmCurrentPassword).
+  if (!(await confirmCurrentPassword(req.user._id, password))) {
     await audit(req, 'auth.step_up_failed', {
       targetType: 'auth',
       targetId: req.params.id ?? '',

@@ -62,6 +62,10 @@ async function checkBooking({ userId, serviceId, staffId, date, startTime, exclu
   if (start < toMinutes(staff.startTime) || end > toMinutes(staff.endTime)) {
     throw new ApiError(400, `Please choose a time between ${staff.startTime} and ${staff.endTime}.`);
   }
+  // Only the offered slots (every 30 minutes from the start of the day), not e.g. 09:07.
+  if ((start - toMinutes(staff.startTime)) % SLOT_STEP_MINUTES !== 0) {
+    throw new ApiError(400, 'Please choose one of the available time slots.');
+  }
   if (isInPast(date, startTime)) throw new ApiError(400, 'You cannot book a time that has already passed.');
   if (date > addDays(nowInBusinessTz().date, MAX_DAYS_AHEAD)) {
     throw new ApiError(400, `Appointments can be booked up to ${MAX_DAYS_AHEAD} days ahead.`);
@@ -82,12 +86,45 @@ async function checkBooking({ userId, serviceId, staffId, date, startTime, exclu
   return { endTime };
 }
 
+/**
+ * checkBooking reads then writes, so two requests for the same slot at the same
+ * moment could both pass it. After saving, look again: if another active
+ * appointment now overlaps (same staff, or same client), this request backs off.
+ * In the worst case both racing requests back off; a slot is never double-booked.
+ */
+async function hasRaceClash(appointment) {
+  const others = await Appointment.find({
+    _id: { $ne: appointment._id },
+    date: appointment.date,
+    status: { $in: ACTIVE_STATUSES },
+    $or: [{ staff: appointment.staff }, { user: appointment.user }],
+  }).select('startTime endTime');
+  return others.some((a) => overlaps(appointment.startTime, appointment.endTime, a.startTime, a.endTime));
+}
+
+const slotTaken = () => new ApiError(409, 'That time slot was just taken. Please choose another.');
+
+// Clients can hold this many upcoming (pending/confirmed) appointments at once,
+// so one account can't block a staff member's whole calendar.
+const MAX_ACTIVE_PER_CLIENT = 5;
+
+// Allowed status changes (staff use their own, stricter rules in the portal).
+// Completed can only go back to confirmed, to correct a mistaken "completed";
+// a cancelled booking can be restored (it is re-checked like a new booking,
+// so only for future times).
+const TRANSITIONS = {
+  pending: ['confirmed', 'cancelled', 'completed'],
+  confirmed: ['pending', 'cancelled', 'completed'],
+  completed: ['confirmed'],
+  cancelled: ['pending', 'confirmed'],
+};
+
 // Admin-panel sessions can access any appointment; everyone else only their own.
 async function findAccessible(id, req) {
   // Staff notes are private: only loaded for the admin panel.
   const appointment = await Appointment.findById(id).select(isAdminRequest(req) ? '+staffNotes' : '');
   if (!appointment) throw new ApiError(404, 'Appointment not found.');
-  if (!isAdminRequest(req) && !appointment.user.equals(req.user._id)) {
+  if (!isAdminRequest(req) && (!appointment.user.equals(req.user._id) || appointment.hiddenForClient)) {
     // 404 rather than 403 so clients can't probe for other people's appointment IDs.
     throw new ApiError(404, 'Appointment not found.');
   }
@@ -135,8 +172,10 @@ export async function listAppointments(req, res) {
   const filter = {};
   const admin = isAdminRequest(req);
 
-  if (!admin) filter.user = req.user._id;
-  else if (req.query.user) filter.user = String(req.query.user);
+  if (!admin) {
+    filter.user = req.user._id;
+    filter.hiddenForClient = { $ne: true };
+  } else if (req.query.user) filter.user = String(req.query.user);
 
   if (STATUSES.includes(req.query.status)) filter.status = req.query.status;
   else if (req.query.status === 'active') filter.status = { $in: ACTIVE_STATUSES };
@@ -185,7 +224,7 @@ export async function listAppointments(req, res) {
 // GET /api/appointments/stats
 export async function getStats(req, res) {
   const admin = isAdminRequest(req);
-  const match = admin ? {} : { user: req.user._id };
+  const match = admin ? {} : { user: req.user._id, hiddenForClient: { $ne: true } };
   const today = nowInBusinessTz().date;
   const weekEnd = addDays(today, 6);
 
@@ -241,6 +280,18 @@ export async function createAppointment(req, res) {
   const { service, staff, date, startTime, notes } = req.body;
   const userId = req.user._id;
 
+  const activeCount = await Appointment.countDocuments({
+    user: userId,
+    status: { $in: ACTIVE_STATUSES },
+    date: { $gte: nowInBusinessTz().date },
+  });
+  if (activeCount >= MAX_ACTIVE_PER_CLIENT) {
+    throw new ApiError(
+      409,
+      `You can have up to ${MAX_ACTIVE_PER_CLIENT} upcoming appointments at a time. Please cancel or wait for one to finish before booking another.`
+    );
+  }
+
   const { endTime } = await checkBooking({ userId, serviceId: service, staffId: staff, date, startTime });
   const appointment = await Appointment.create({
     user: userId,
@@ -252,6 +303,10 @@ export async function createAppointment(req, res) {
     notes,
     status: 'pending',
   });
+  if (await hasRaceClash(appointment)) {
+    await appointment.deleteOne();
+    throw slotTaken();
+  }
 
   res.status(201).json({ appointment: await appointment.populate(POPULATE) });
 }
@@ -277,6 +332,13 @@ export async function updateAppointment(req, res) {
     if (status !== undefined && status !== 'cancelled' && status !== appointment.status) {
       throw new ApiError(403, 'You can only cancel your appointment. Only an admin can confirm or complete it.');
     }
+    if (isInPast(appointment.date, appointment.startTime)) {
+      throw new ApiError(400, 'This appointment has already started, so it can no longer be changed or cancelled.');
+    }
+  }
+
+  if (status !== undefined && status !== appointment.status && !TRANSITIONS[appointment.status].includes(status)) {
+    throw new ApiError(400, `A ${appointment.status} appointment can't be changed to ${status}.`);
   }
 
   const next = {
@@ -293,13 +355,25 @@ export async function updateAppointment(req, res) {
     next.date !== appointment.date ||
     next.startTime !== appointment.startTime;
   const willBeActive = ACTIVE_STATUSES.includes(next.status);
-  const reactivated = willBeActive && !ACTIVE_STATUSES.includes(appointment.status);
+  // Re-opening a cancelled booking re-checks its slot. A completed one has
+  // already started, so nobody else can have booked that time since.
+  const reactivated = willBeActive && appointment.status === 'cancelled';
 
   if (rescheduled && !willBeActive) {
     throw new ApiError(400, `A ${next.status} appointment cannot be rescheduled.`);
   }
 
-  if (willBeActive && (rescheduled || reactivated)) {
+  const previous = {
+    service: appointment.service,
+    staff: appointment.staff,
+    date: appointment.date,
+    startTime: appointment.startTime,
+    endTime: appointment.endTime,
+    status: appointment.status,
+  };
+  const takesNewSlot = willBeActive && (rescheduled || reactivated);
+
+  if (takesNewSlot) {
     const { endTime } = await checkBooking({
       userId: appointment.user,
       serviceId: next.service,
@@ -319,6 +393,13 @@ export async function updateAppointment(req, res) {
   if (admin && req.body.staffNotes !== undefined) appointment.staffNotes = req.body.staffNotes;
   await appointment.save();
 
+  // Someone else took the slot at the same moment: put the appointment back.
+  if (takesNewSlot && (await hasRaceClash(appointment))) {
+    appointment.set(previous);
+    await appointment.save();
+    throw slotTaken();
+  }
+
   if (admin) {
     const changes = [];
     if (before.status !== appointment.status) changes.push(`${before.status} → ${appointment.status}`);
@@ -336,15 +417,25 @@ export async function updateAppointment(req, res) {
 }
 
 // DELETE /api/appointments/:id
+// Admins delete the record. A client only removes a finished (completed or
+// cancelled) appointment from their own history; the record stays for staff
+// and admins, and active bookings must be cancelled instead.
 export async function deleteAppointment(req, res) {
   const appointment = await findAccessible(req.params.id, req);
-  await appointment.deleteOne();
-  if (isAdminRequest(req)) {
-    await audit(req, 'appointment.delete', {
-      targetType: 'appointment',
-      targetId: appointment._id,
-      summary: `Deleted ${appointment.status} appointment on ${describe(appointment)}`,
-    });
+  if (!isAdminRequest(req)) {
+    if (ACTIVE_STATUSES.includes(appointment.status)) {
+      throw new ApiError(400, 'Cancel this appointment first; only finished appointments can be removed from your history.');
+    }
+    appointment.hiddenForClient = true;
+    await appointment.save();
+    return res.json({ message: 'Appointment removed from your history.' });
   }
+
+  await appointment.deleteOne();
+  await audit(req, 'appointment.delete', {
+    targetType: 'appointment',
+    targetId: appointment._id,
+    summary: `Deleted ${appointment.status} appointment on ${describe(appointment)}`,
+  });
   res.json({ message: 'Appointment deleted.' });
 }

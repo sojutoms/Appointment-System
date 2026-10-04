@@ -13,10 +13,11 @@ import Typography from '@mui/material/Typography';
 import api from '../api/axios';
 import OtpInput from '../components/OtpInput';
 import PasswordField from '../components/PasswordField';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 import ResendCode from '../components/ResendCode';
 import SubmitButton from '../components/SubmitButton';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
-import { getCooldownUntil, startCooldown } from '../utils/otpSession';
+import { clearCooldown, getCooldownUntil, startCooldown } from '../utils/otpSession';
 import { validateEmail, validatePassword } from '../utils/validation';
 
 const PURPOSE = 'reset-password';
@@ -110,6 +111,8 @@ export default function ForgotPassword() {
     try {
       const { data } = await api.post('/auth/verify-reset-otp', { email: normalizedEmail, otp });
       setResetToken(data.resetToken);
+      // This code is now used up: going back must request a new one, not reuse it.
+      clearCooldown(PURPOSE, normalizedEmail);
       setStep(2);
     } catch (err) {
       fail(err);
@@ -142,7 +145,8 @@ export default function ForgotPassword() {
       if (err.response?.data?.code === 'RESET_EXPIRED') {
         setResetToken('');
         setCode('');
-        setStep(1);
+        // The used code no longer works, so start over by requesting a new one.
+        setStep(0);
       }
       setBusy(false);
     }
@@ -198,6 +202,7 @@ export default function ForgotPassword() {
             <TextField
               label="Email"
               type="email"
+              slotProps={{ htmlInput: { maxLength: 64 } }}
               placeholder="you@example.com"
               autoComplete="email"
               autoFocus
@@ -252,16 +257,19 @@ export default function ForgotPassword() {
       {step === 2 && (
         <Box component="form" noValidate onSubmit={savePassword}>
           <Stack spacing={2.5}>
-            <PasswordField
-              label="New password"
-              name="password"
-              autoComplete="new-password"
-              autoFocus
-              value={passwords.password}
-              onChange={handlePasswordChange}
-              error={fieldErrors.password}
-              helperText="At least 8 characters, with a letter and a number"
-            />
+            <Box>
+              <PasswordField
+                label="New password"
+                name="password"
+                autoComplete="new-password"
+                autoFocus
+                value={passwords.password}
+                onChange={handlePasswordChange}
+                error={fieldErrors.password}
+                helperText="8 to 32 characters, with a letter and a number"
+              />
+              <PasswordStrengthMeter password={passwords.password} />
+            </Box>
             <PasswordField
               label="Confirm new password"
               name="confirmPassword"

@@ -19,7 +19,9 @@ const services = [
 
 const staff = [
   {
-    name: 'Dr. Maria Santos',
+    firstName: 'Maria',
+    lastName: 'Santos',
+    name: 'Maria Santos',
     specialization: 'General Practitioner',
     email: 'maria.santos@example.com',
     serviceNames: ['General Consultation', 'Follow-up Visit', 'Comprehensive Check-up', 'Quick Assessment'],
@@ -28,7 +30,9 @@ const staff = [
     endTime: '17:00',
   },
   {
-    name: 'Dr. Jose Reyes',
+    firstName: 'Jose',
+    lastName: 'Reyes',
+    name: 'Jose Reyes',
     specialization: 'Specialist',
     email: 'jose.reyes@example.com',
     serviceNames: ['Comprehensive Check-up', 'Follow-up Visit'],
@@ -37,6 +41,8 @@ const staff = [
     endTime: '18:00',
   },
   {
+    firstName: 'Ana',
+    lastName: 'Cruz',
     name: 'Ana Cruz',
     specialization: 'Counselor',
     email: 'ana.cruz@example.com',
@@ -62,7 +68,7 @@ async function seed() {
   } else if (await User.exists({ email: adminEmail })) {
     console.log(`Admin ${adminEmail} already exists.`);
   } else {
-    await User.create({ name: 'System Admin', email: adminEmail, password: adminPassword, role: 'admin' });
+    await User.create({ firstName: 'System', lastName: 'Admin', email: adminEmail, password: adminPassword, role: 'admin' });
     console.log(`Created admin ${adminEmail}.`);
   }
 

@@ -18,10 +18,19 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import api from '../api/axios';
+import { fetchAll } from '../api/fetchAll';
 import { getErrorMessage, getFieldErrors } from '../utils/errors';
+import {
+  cleanNameInput,
+  cleanSpecializationInput,
+  LIMITS,
+  splitName,
+  validateEmail,
+  validatePersonName,
+  validateSpecialization,
+} from '../utils/validation';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Add (no `staff`) or edit (with `staff`) a staff member.
 export default function StaffFormDialog({ staff, onClose, onSaved }) {
@@ -30,7 +39,7 @@ export default function StaffFormDialog({ staff, onClose, onSaved }) {
   const hasLogin = Boolean(staff?.portal && staff.portal.status !== 'none');
   const [services, setServices] = useState([]);
   const [form, setForm] = useState({
-    name: staff?.name ?? '',
+    ...splitName(staff),
     specialization: staff?.specialization ?? '',
     email: staff?.email ?? '',
     services: staff?.services ?? [],
@@ -44,9 +53,8 @@ export default function StaffFormDialog({ staff, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api
-      .get('/services', { params: { includeInactive: true, limit: 50 } })
-      .then(({ data }) => setServices(data.items))
+    fetchAll('/services', { includeInactive: true })
+      .then(setServices)
       .catch(() => setServices([]));
   }, []);
 
@@ -58,8 +66,14 @@ export default function StaffFormDialog({ staff, onClose, onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     const nextErrors = {};
-    if (!form.name.trim()) nextErrors.name = 'Name is required.';
-    if (form.email.trim() && !EMAIL.test(form.email.trim())) nextErrors.email = 'Enter a valid email address.';
+    const firstNameError = validatePersonName(form.firstName, 'First name');
+    if (firstNameError) nextErrors.firstName = firstNameError;
+    const lastNameError = validatePersonName(form.lastName, 'Last name');
+    if (lastNameError) nextErrors.lastName = lastNameError;
+    const specializationError = validateSpecialization(form.specialization);
+    if (specializationError) nextErrors.specialization = specializationError;
+    const emailError = !hasLogin && validateEmail(form.email, { required: false });
+    if (emailError) nextErrors.email = emailError;
     if (!form.workingDays.length) nextErrors.workingDays = 'Select at least one working day.';
     if (!form.startTime || !form.endTime || form.startTime >= form.endTime) nextErrors.endTime = 'End time must be later than start time.';
     if (!form.services.length) nextErrors.services = 'Select at least one service so clients can book this person.';
@@ -69,7 +83,8 @@ export default function StaffFormDialog({ staff, onClose, onSaved }) {
     setBusy(true);
     setError('');
     const payload = {
-      name: form.name.trim(),
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
       specialization: form.specialization.trim(),
       ...(!hasLogin && { email: form.email.trim().toLowerCase() }),
       services: form.services.map((s) => s._id),
@@ -99,12 +114,39 @@ export default function StaffFormDialog({ staff, onClose, onSaved }) {
             </Alert>
           )}
           <Stack spacing={2.5} sx={{ pt: 1 }}>
-            <TextField label="Full name" autoFocus value={form.name} onChange={(e) => set('name', e.target.value)} error={Boolean(errors.name)} helperText={errors.name} slotProps={{ htmlInput: { maxLength: 80 } }} />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField label="Specialization" placeholder="e.g. General Practitioner" value={form.specialization} onChange={(e) => set('specialization', e.target.value)} slotProps={{ htmlInput: { maxLength: 100 } }} />
+              <TextField
+                label="First name"
+                autoFocus
+                value={form.firstName}
+                onChange={(e) => set('firstName', cleanNameInput(e.target.value))}
+                error={Boolean(errors.firstName)}
+                helperText={errors.firstName}
+                slotProps={{ htmlInput: { maxLength: LIMITS.name } }}
+              />
+              <TextField
+                label="Last name"
+                value={form.lastName}
+                onChange={(e) => set('lastName', cleanNameInput(e.target.value))}
+                error={Boolean(errors.lastName)}
+                helperText={errors.lastName}
+                slotProps={{ htmlInput: { maxLength: LIMITS.name } }}
+              />
+            </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Specialization"
+                placeholder="e.g. General Practitioner"
+                value={form.specialization}
+                onChange={(e) => set('specialization', cleanSpecializationInput(e.target.value))}
+                error={Boolean(errors.specialization)}
+                helperText={errors.specialization}
+                slotProps={{ htmlInput: { maxLength: LIMITS.specialization } }}
+              />
               <TextField
                 label="Work email (optional)"
                 type="email"
+                slotProps={{ htmlInput: { maxLength: LIMITS.email } }}
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
                 disabled={hasLogin}
@@ -166,7 +208,7 @@ export default function StaffFormDialog({ staff, onClose, onSaved }) {
 
             <FormControlLabel
               control={<Switch checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} />}
-              label={form.isActive ? 'Active: clients can book with this person' : 'Inactive: hidden from clients'}
+              label={form.isActive ? 'Active: clients can book with this person' : 'Inactive: hidden from clients, and no staff-portal access'}
             />
           </Stack>
         </DialogContent>

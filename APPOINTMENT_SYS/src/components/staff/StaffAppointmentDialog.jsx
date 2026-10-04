@@ -14,8 +14,9 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import api from '../../api/axios';
 import { getErrorMessage } from '../../utils/errors';
-import { formatDate, formatDuration, formatTimeRange } from '../../utils/format';
+import { formatDate, formatDuration, formatPhone, formatTimeRange } from '../../utils/format';
 import { hasStarted } from '../../utils/staff';
+import ConfirmDialog from '../ConfirmDialog';
 import StatusChip from '../StatusChip';
 
 function Field({ label, children }) {
@@ -36,6 +37,8 @@ export default function StaffAppointmentDialog({ appointment, onClose, onUpdated
   const [staffNotes, setStaffNotes] = useState(appt.staffNotes ?? '');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  // Completing can't be undone by staff, so it is confirmed first.
+  const [confirmComplete, setConfirmComplete] = useState(false);
 
   const save = async (changes, label) => {
     setBusy(label);
@@ -88,7 +91,7 @@ export default function StaffAppointmentDialog({ appointment, onClose, onUpdated
                 {appt.user.phone && (
                   <>
                     {' · '}
-                    <Link href={`tel:${appt.user.phone.replace(/[^\d+]/g, '')}`}>{appt.user.phone}</Link>
+                    <Link href={`tel:${appt.user.phone.replace(/[^\d+]/g, '')}`}>{formatPhone(appt.user.phone)}</Link>
                   </>
                 )}
               </Typography>
@@ -100,11 +103,11 @@ export default function StaffAppointmentDialog({ appointment, onClose, onUpdated
           <Divider />
           <TextField
             label="Staff notes"
-            helperText={`Private: only staff and admins see these. ${staffNotes.length}/1000`}
+            helperText={`Private: only staff and admins see these. ${staffNotes.length}/500`}
             multiline
             minRows={3}
             value={staffNotes}
-            onChange={(e) => setStaffNotes(e.target.value.slice(0, 1000))}
+            onChange={(e) => setStaffNotes(e.target.value.slice(0, 500))}
           />
           {notesChanged && (
             <Box>
@@ -128,7 +131,7 @@ export default function StaffAppointmentDialog({ appointment, onClose, onUpdated
           </Button>
         )}
         {canComplete && (
-          <Button variant="contained" onClick={() => save({ status: 'completed' }, 'completed')} disabled={Boolean(busy)}>
+          <Button variant="contained" onClick={() => setConfirmComplete(true)} disabled={Boolean(busy)}>
             Mark completed
           </Button>
         )}
@@ -136,6 +139,20 @@ export default function StaffAppointmentDialog({ appointment, onClose, onUpdated
           Close
         </Button>
       </DialogActions>
+      <ConfirmDialog
+        open={confirmComplete}
+        title="Mark as completed?"
+        message="Only an administrator can undo this. Make sure this is the right appointment."
+        confirmText="Mark completed"
+        cancelText="Go back"
+        color="primary"
+        busy={busy === 'completed'}
+        onConfirm={async () => {
+          await save({ status: 'completed' }, 'completed');
+          setConfirmComplete(false);
+        }}
+        onClose={() => setConfirmComplete(false)}
+      />
     </Dialog>
   );
 }

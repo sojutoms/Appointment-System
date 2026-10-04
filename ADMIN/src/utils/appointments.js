@@ -1,5 +1,5 @@
 // Shared appointment constants and helpers.
-import { todayString } from './format';
+import { nowInBusinessTz, todayString } from './format';
 
 export const STATUS_META = {
   pending: { label: 'Pending', color: 'warning' },
@@ -15,7 +15,6 @@ export const isActive = (appt) => ['pending', 'confirmed'].includes(appt.status)
 export function hasStarted(appt) {
   const today = todayString();
   if (appt.date !== today) return appt.date < today;
-  const now = new Date();
   const [h, m] = appt.startTime.split(':').map(Number);
-  return now.getHours() * 60 + now.getMinutes() >= h * 60 + m;
+  return nowInBusinessTz().minutes >= h * 60 + m;
 }

@@ -9,6 +9,13 @@ export default function SearchField({ value, onChange, placeholder, sx }) {
   const [text, setText] = useState(value);
   const debounced = useDebounce(text.trim());
 
+  // The value was changed from outside (Clear filters, back/forward): show it.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    if (value !== text.trim()) setText(value);
+  }
+
   useEffect(() => {
     if (debounced !== value) onChange(debounced);
     // Only react to the debounced text; `value` changes come from this effect.
@@ -30,7 +37,7 @@ export default function SearchField({ value, onChange, placeholder, sx }) {
             </InputAdornment>
           ),
         },
-        htmlInput: { 'aria-label': placeholder, maxLength: 100 },
+        htmlInput: { 'aria-label': placeholder, maxLength: 50 },
       }}
     />
   );

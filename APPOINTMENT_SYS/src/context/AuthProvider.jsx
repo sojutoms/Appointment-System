@@ -23,8 +23,29 @@ export default function AuthProvider({ children }) {
     api
       .get('/auth/me')
       .then(({ data }) => setUser(data.user))
-      .catch(() => localStorage.removeItem(TOKEN_KEY))
+      // A rejected token (401) is cleared by the auth:expired handler below. A
+      // server or network error keeps it, so a blip doesn't log the user out;
+      // the next page load tries again.
+      .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  // Logging in or out in another tab changes the shared token: follow it here,
+  // so this tab never shows one account while sending another account's token.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== TOKEN_KEY && e.key !== null) return;
+      if (!e.newValue || e.key === null) {
+        setUser(null);
+        return;
+      }
+      api
+        .get('/auth/me')
+        .then(({ data }) => setUser(data.user))
+        .catch(() => setUser(null));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // The Axios interceptor fires this when the server rejects our token.

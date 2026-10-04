@@ -2,12 +2,14 @@ import { useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import api from '../api/axios';
+import ChangeEmailDialog from '../components/ChangeEmailDialog';
 import PageHeader from '../components/PageHeader';
 import PasswordField from '../components/PasswordField';
 import SubmitButton from '../components/SubmitButton';
@@ -28,7 +30,8 @@ function validateAdminPassword(password) {
 }
 
 export default function Account() {
-  const { user, completeSession, sessionEndsAt } = useAuth();
+  const { user, completeSession, sessionEndsAt, updateUser } = useAuth();
+  const [emailDialog, setEmailDialog] = useState(false);
   const showToast = useToast();
   const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
@@ -97,8 +100,11 @@ export default function Account() {
                   <strong>Last sign-in:</strong> {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('en-US') : '—'}
                 </Typography>
               </Stack>
-              <Alert severity="info" sx={{ mt: 3 }}>
-                To change your name or email, use the client app&apos;s profile page. Email changes are verified with a code.
+              <Button variant="outlined" onClick={() => setEmailDialog(true)} sx={{ mt: 3 }}>
+                Change email
+              </Button>
+              <Alert severity="info" sx={{ mt: 2 }}>
+                To change your name or phone number, use the client app&apos;s profile page. Your email can only be changed here, and the new address must be confirmed with a code.
               </Alert>
             </CardContent>
           </Card>
@@ -110,7 +116,7 @@ export default function Account() {
                 Change password
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Admin passwords need 12+ characters with upper- and lowercase letters, a number and a symbol.
+                Admin passwords need 12 to 32 characters with upper- and lowercase letters, a number and a symbol.
               </Typography>
               {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -133,6 +139,16 @@ export default function Account() {
           </Card>
         </Grid>
       </Grid>
+
+      <ChangeEmailDialog
+        open={emailDialog}
+        currentEmail={user.email}
+        onClose={() => setEmailDialog(false)}
+        onChanged={(updated) => {
+          updateUser(updated);
+          showToast('Email address updated. Use it the next time you sign in.');
+        }}
+      />
     </>
   );
 }

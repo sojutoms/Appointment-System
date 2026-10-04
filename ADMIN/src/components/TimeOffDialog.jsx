@@ -20,6 +20,8 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import api from '../api/axios';
+import { fetchAll } from '../api/fetchAll';
+import ConfirmDialog from './ConfirmDialog';
 import { getErrorMessage } from '../utils/errors';
 import { addDays, formatDate, formatTime, todayString } from '../utils/format';
 
@@ -35,9 +37,8 @@ export default function TimeOffDialog({ staff, onClose, onChanged }) {
 
   useEffect(() => {
     let active = true;
-    api
-      .get('/time-off', { params: { staff: staff._id, limit: 50 } })
-      .then(({ data }) => active && setEntries(data.items))
+    fetchAll('/time-off', { staff: staff._id })
+      .then((items) => active && setEntries(items))
       .catch((err) => active && setError(getErrorMessage(err)));
     return () => {
       active = false;
@@ -49,6 +50,11 @@ export default function TimeOffDialog({ staff, onClose, onChanged }) {
   const add = async (e) => {
     e.preventDefault();
     setError('');
+    const today = todayString();
+    if (form.date < today || form.date > addDays(today, 180)) {
+      setError('Choose a date between today and 180 days from now.');
+      return;
+    }
     if (!form.allDay && form.startTime >= form.endTime) {
       setError('End time must be later than start time.');
       return;
@@ -72,19 +78,29 @@ export default function TimeOffDialog({ staff, onClose, onChanged }) {
     }
   };
 
-  const remove = async (entry) => {
+  // Removing reopens those times for booking, so it is confirmed first, and the
+  // entry is locked while the request runs (no double DELETE on a double-click).
+  const [removing, setRemoving] = useState(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
+
+  const remove = async () => {
     setError('');
+    setRemoveBusy(true);
     try {
-      await api.delete(`/time-off/${entry._id}`);
+      await api.delete(`/time-off/${removing._id}`);
       setRefresh((n) => n + 1);
       onChanged?.('Time off removed.');
+      setRemoving(null);
     } catch (err) {
       setError(getErrorMessage(err));
+      setRemoving(null);
+    } finally {
+      setRemoveBusy(false);
     }
   };
 
   return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+    <Dialog open onClose={busy || removeBusy ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Time off · {staff.name}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -115,7 +131,7 @@ export default function TimeOffDialog({ staff, onClose, onChanged }) {
                 <TextField type="time" label="Until" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
               </Stack>
             )}
-            <TextField label="Reason (optional, staff and admins only)" value={form.reason} onChange={(e) => set('reason', e.target.value)} slotProps={{ htmlInput: { maxLength: 200 } }} />
+            <TextField label="Reason (optional, staff and admins only)" value={form.reason} onChange={(e) => set('reason', e.target.value)} slotProps={{ htmlInput: { maxLength: 100 } }} />
             <Box>
               <Button type="submit" variant="contained" disabled={busy || !form.date} startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
                 Add time off
@@ -137,7 +153,7 @@ export default function TimeOffDialog({ staff, onClose, onChanged }) {
                 key={t._id}
                 disableGutters
                 secondaryAction={
-                  <IconButton edge="end" aria-label="Remove time off" onClick={() => remove(t)}>
+                  <IconButton edge="end" aria-label="Remove time off" onClick={() => setRemoving(t)} disabled={removeBusy}>
                     <DeleteOutlineRoundedIcon />
                   </IconButton>
                 }
@@ -152,10 +168,23 @@ export default function TimeOffDialog({ staff, onClose, onChanged }) {
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} variant="outlined">
+        <Button onClick={onClose} variant="outlined" disabled={busy || removeBusy}>
           Done
         </Button>
       </DialogActions>
+      <ConfirmDialog
+        open={Boolean(removing)}
+        title="Remove this time off?"
+        message={
+          removing
+            ? `${formatDate(removing.date)} · ${removing.allDay ? 'All day' : `${formatTime(removing.startTime)} – ${formatTime(removing.endTime)}`} will become bookable again.`
+            : ''
+        }
+        confirmText="Remove"
+        busy={removeBusy}
+        onConfirm={remove}
+        onClose={() => setRemoving(null)}
+      />
     </Dialog>
   );
 }

@@ -6,7 +6,8 @@ import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 
 // Password TextField with a show/hide toggle; `error` is the message to show.
-export default function PasswordField({ error, autoComplete = 'current-password', ...props }) {
+// Capped at 32 characters (the server enforces the same).
+export default function PasswordField({ error, helperText, autoComplete = 'current-password', ...props }) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -14,9 +15,10 @@ export default function PasswordField({ error, autoComplete = 'current-password'
       type={visible ? 'text' : 'password'}
       autoComplete={autoComplete}
       error={Boolean(error)}
-      helperText={error || props.helperText}
+      helperText={error || helperText}
       {...props}
       slotProps={{
+        htmlInput: { maxLength: 32 },
         input: {
           endAdornment: (
             <InputAdornment position="end">

@@ -20,7 +20,8 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   // Where the user was trying to go before being sent to login (if anywhere).
-  const redirectTo = location.state?.from?.pathname;
+  const from = location.state?.from;
+  const redirectTo = from?.pathname ? `${from.pathname}${from.search ?? ''}` : '';
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
@@ -98,6 +99,7 @@ export default function Login() {
           <TextField
             label="Email"
             type="email"
+            slotProps={{ htmlInput: { maxLength: 64 } }}
             name="email"
             placeholder="you@example.com"
             autoComplete="email"

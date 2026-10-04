@@ -14,8 +14,7 @@ import ResendCode from '../components/ResendCode';
 import SubmitButton from '../components/SubmitButton';
 import useAuth from '../hooks/useAuth';
 import { getErrorMessage } from '../utils/errors';
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { validateEmail } from '../utils/validation';
 
 // Two steps: password, then the 6-digit code emailed to the admin.
 // The challenge token from step 1 lives only in component state, never in storage.
@@ -23,7 +22,9 @@ export default function Login() {
   const { startLogin, verifyCode, resendCode, signOutReason } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = location.state?.from?.pathname || '/';
+  // Keep the filters (?status=...&page=...) of the page the admin was on.
+  const from = location.state?.from;
+  const redirectTo = from?.pathname ? `${from.pathname}${from.search ?? ''}` : '/';
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
@@ -43,7 +44,8 @@ export default function Login() {
     e.preventDefault();
     setError('');
     const nextErrors = {};
-    if (!EMAIL.test(form.email.trim())) nextErrors.email = 'Enter a valid email address.';
+    const emailError = validateEmail(form.email);
+    if (emailError) nextErrors.email = emailError;
     if (!form.password) nextErrors.password = 'Enter your password.';
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
@@ -182,6 +184,7 @@ export default function Login() {
           <TextField
             label="Email"
             type="email"
+            slotProps={{ htmlInput: { maxLength: 64 } }}
             name="email"
             autoComplete="username"
             autoFocus

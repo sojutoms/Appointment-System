@@ -1,15 +1,17 @@
 import Staff from '../models/Staff.js';
 import User from '../models/User.js';
 import ApiError from '../utils/ApiError.js';
-import { assertAdminPasswordStrength, recordLogin, verifyCredentials } from '../utils/credentials.js';
-import { clearOtp, consumeResetToken, issueOtp, issueResetToken, verifyOtp } from '../utils/otp.js';
+import { assertAdminPasswordStrength, assertNewPassword, recordLogin, verifyCredentials } from '../utils/credentials.js';
+import { clearOtp, findResetToken, issueOtp, issueResetToken, verifyOtp } from '../utils/otp.js';
 import { SCOPES, scopeForRole, signToken } from '../utils/tokens.js';
 
 // POST /api/auth/register
 // Creates an unverified account and emails a verification code. No login
 // token is issued until the code is confirmed at /verify-email.
 export async function register(req, res) {
-  const { name, email, password, phone } = req.body;
+  const { firstName, lastName, email, password } = req.body;
+  const phone = req.body.phone || '';
+  const phoneCountry = phone ? req.body.phoneCountry : '';
 
   let user = await User.findOne({ email }).select('+tokenVersion');
   // Verified accounts, and any staff/admin account, can never be taken over by signing up again.
@@ -20,10 +22,10 @@ export async function register(req, res) {
   if (user) {
     // Unverified sign-up for this email already exists (e.g. user never
     // entered the code): replace its details so the real owner can finish.
-    user.set({ name, password, phone });
+    user.set({ firstName, lastName, password, phone, phoneCountry });
   } else {
     // Role is never taken from the request: everyone who signs up is a client.
-    user = new User({ name, email, password, phone, role: 'client', isVerified: false });
+    user = new User({ firstName, lastName, email, password, phone, phoneCountry, role: 'client', isVerified: false });
   }
   await user.save();
 
@@ -79,6 +81,11 @@ export async function login(req, res) {
       code: 'EMAIL_NOT_VERIFIED',
       email: user.email,
     });
+  }
+
+  // Staff need an active staff profile to use the portal (see requireStaff).
+  if (user.role === 'staff' && !(await Staff.exists({ user: user._id, isActive: true }))) {
+    throw new ApiError(403, 'Your staff profile is inactive or was removed. Please contact an administrator.');
   }
 
   await recordLogin(user);
@@ -154,19 +161,23 @@ export async function verifyResetOtp(req, res) {
 export async function resetPassword(req, res) {
   const { email, resetToken, password } = req.body;
 
-  const valid = await consumeResetToken({ email, token: resetToken });
-  const user = valid && (await User.findOne({ email }).select('+tokenVersion'));
+  const resetRecord = await findResetToken({ email, token: resetToken });
+  const user = resetRecord && (await User.findOne({ email: resetRecord.email }).select('+password +tokenVersion'));
   if (!user) {
     throw new ApiError(400, 'Your reset session has expired. Please request a new code.', undefined, {
       code: 'RESET_EXPIRED',
     });
   }
 
+  // Checked before the token is used up, so the user can simply try another
+  // password. Only reachable with a valid token, i.e. by the inbox owner.
   assertAdminPasswordStrength(user, password);
+  await assertNewPassword(user, password);
   user.password = password;
   // Receiving the code proves they own the inbox.
   user.isVerified = true;
   await user.save();
+  await resetRecord.deleteOne();
 
   res.json({ message: 'Your password has been reset. You can now log in.' });
 }

@@ -28,13 +28,13 @@ import ServiceFormDialog from '../components/ServiceFormDialog';
 import TablePager from '../components/TablePager';
 import useApiList from '../hooks/useApiList';
 import useToast from '../hooks/useToast';
-import useUrlFilters from '../hooks/useUrlFilters';
+import useUrlFilters, { FILTER } from '../hooks/useUrlFilters';
 import { getErrorMessage } from '../utils/errors';
 import { formatDuration, formatPrice } from '../utils/format';
 
 export default function Services() {
   const showToast = useToast();
-  const [filters, setFilters] = useUrlFilters({ q: '' });
+  const [filters, setFilters] = useUrlFilters({ q: '' }, { q: FILTER.search });
   const { items, pagination, loading, error, reload } = useApiList('/services', {
     includeInactive: true,
     search: filters.q,

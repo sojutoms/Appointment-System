@@ -26,7 +26,7 @@ export default function DateStrip({ dates, value, onChange, isDisabled }) {
       </IconButton>
       <Box
         ref={scroller}
-        role="listbox"
+        role="group"
         aria-label="Choose a date"
         sx={{
           display: 'flex',
