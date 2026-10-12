@@ -16,6 +16,8 @@ import { parallaxSx, useSectionProgress } from '../utils/parallax';
 import doctorPhoto from '../assets/doctor.png';
 import { bookingLink } from '../components/landing/bookingLink';
 import HeroPreview from '../components/landing/HeroPreview';
+import PatientStoriesSection from '../components/landing/PatientStoriesSection';
+import { PATIENT_STORIES } from '../components/landing/patientStories';
 import SpecialistsSection from '../components/landing/SpecialistsSection';
 import { HERO_STAFF_ID } from '../components/landing/specialistMedia';
 import QuickBookingBar from '../components/landing/QuickBookingBar';
@@ -535,6 +537,19 @@ export default function Home() {
         <SectionGlow variant='doctors' />
         <Container sx={[{ position: 'relative' }, containerSx]}>
           <SpecialistsSection staff={staff} services={services} canBook={!isStaff} canSeeLive={CLIENT_ROLES.includes(user?.role)} />
+        </Container>
+      </Box>
+
+      {/* ---------- Patient stories ---------- */}
+      <Box component="section" id="stories" sx={{ ...sectionSx, position: 'relative' }}>
+        <SectionGlow variant="steps" />
+        <Container sx={[{ position: 'relative' }, containerSx]}>
+          <SectionHeading
+            eyebrow="Patient stories"
+            title="Real care, real recoveries"
+            text="From the first check-in to the day they feel better, in our patients' own words."
+          />
+          <PatientStoriesSection stories={PATIENT_STORIES} />
         </Container>
       </Box>
 
