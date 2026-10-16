@@ -33,7 +33,7 @@ export default function Profile() {
     () => [
       { id: 'personal-info', label: 'Personal info' },
       { id: 'security', label: 'Security' },
-      ...(isStaff ? [] : [{ id: 'reminders', label: 'Reminders' }, { id: 'danger-zone', label: 'Danger zone', danger: true }]),
+      ...(isStaff ? [] : [{ id: 'reminders', label: 'Reminders' },]),
     ],
     [isStaff],
   );
@@ -87,7 +87,7 @@ export default function Profile() {
           <EmailCard user={user} isStaff={isStaff} isAdmin={isAdmin} onChange={() => setEmailDialog(true)} />
           <SecurityCard isAdmin={isAdmin} />
           {!isStaff && <RemindersCard />}
-          {!isStaff && <DangerZoneCard />}
+          {/* {!isStaff && <DangerZoneCard />} */}
         </Stack>
       </Box>
 

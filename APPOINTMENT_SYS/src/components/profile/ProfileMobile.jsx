@@ -40,7 +40,7 @@ const SCREENS = [
   { id: 'email', title: 'Email address', icon: MailOutlineRoundedIcon },
   { id: 'security', title: 'Security & password', icon: LockOutlinedIcon },
   { id: 'reminders', title: 'Notifications', icon: NotificationsNoneRoundedIcon, clientOnly: true },
-  { id: 'danger-zone', title: 'Danger zone', icon: DeleteOutlineRoundedIcon, clientOnly: true, danger: true },
+  // { id: 'danger-zone', title: 'Danger zone', icon: DeleteOutlineRoundedIcon, clientOnly: true, danger: true },
 ];
 
 function IconTile({ icon: Icon, danger }) {

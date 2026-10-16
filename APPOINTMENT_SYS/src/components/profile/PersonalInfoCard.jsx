@@ -151,13 +151,6 @@ export default function PersonalInfoCard({ subtitle, stickySave = false }) {
             error={errors.phone}
           />
         </Box>
-
-        {/* TODO(backend): add birthday & emergency contact to the User model and PUT /users/me.
-            Until then these are display-only: never saved and not counted in completeness. */}
-        <TextField label="Date of birth" value="" disabled helperText="Coming soon" />
-        <Box sx={{ display: { xs: 'none', sm: 'block' } }} />
-        <TextField label="Emergency contact name" value="" disabled helperText="Coming soon" />
-        <TextField label="Emergency contact phone" value="" disabled helperText="Coming soon" />
       </Box>
     </ProfileSection>
   );
